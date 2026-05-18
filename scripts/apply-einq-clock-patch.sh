@@ -123,7 +123,15 @@ fi
 AM_CPP="$CP/src/activities/ActivityManager.cpp"
 AM_H="$CP/src/activities/ActivityManager.h"
 if ! grep -q 'goToEinqClock' "$AM_H"; then
-  sed -i '' 's/void goHome();/void goHome();\n  void goToEinqClock();/' "$AM_H"
+  python3 - "$AM_H" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+text = text.replace("  void goHome();", "  void goHome();\n  void goToEinqClock();", 1)
+path.write_text(text)
+print("patched ActivityManager.h")
+PY
 fi
 if ! grep -q 'goToEinqClock' "$AM_CPP"; then
   python3 - "$AM_CPP" <<'PY'
