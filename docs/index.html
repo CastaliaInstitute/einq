@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f1ea" />
+    <title>Einq — Castalia e-paper platform</title>
+    <meta
+      name="description"
+      content="Einq is Castalia Institute’s e-paper platform. Build calm, time-aware apps for devices like the Xteink X4 with open-source firmware."
+    />
+    <meta property="og:title" content="Einq — Castalia e-paper platform" />
+    <meta
+      property="og:description"
+      content="Low-power surfaces for information that belongs in the room. Xteink X4, CrossPoint Reader, and time-aware Einq apps."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://einq.castalia.institute/" />
+    <meta property="og:image" content="https://einq.castalia.institute/assets/og.svg" />
+    <link rel="canonical" href="https://einq.castalia.institute/" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital@0;1&family=Source+Sans+3:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <nav class="nav" aria-label="Primary">
+        <a class="nav__brand" href="/">Einq</a>
+        <div class="nav__links">
+          <a href="#platform">Platform</a>
+          <a href="#hardware">Hardware</a>
+          <a href="#apps">Apps</a>
+          <a href="develop.html">Develop</a>
+        </div>
+      </nav>
+    </div>
+
+    <header class="hero wrap">
+      <div>
+        <p class="eyebrow">Castalia Institute</p>
+        <h1>Einq</h1>
+        <p class="tagline">Information that stays in the room.</p>
+        <p class="lede lede--wide">
+          Einq is our e-paper platform: small, quiet displays for calendars, quotes, household rhythm,
+          and anything that should change with the day — not demand your attention like a phone.
+        </p>
+        <p class="lede lede--wide">
+          We start with the <strong>Xteink X4</strong> and
+          <a href="https://github.com/crosspoint-reader/crosspoint-reader">CrossPoint Reader</a>,
+          an open-source firmware stack you can flash, extend, and restore.
+        </p>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="develop.html">Start developing</a>
+          <a class="btn btn--ghost" href="https://github.com/CastaliaInstitute/einq">GitHub</a>
+        </div>
+      </div>
+
+      <div class="hero__device" aria-hidden="true">
+        <span class="hero__label">Xteink X4 · demo face</span>
+        <div class="hero__screen">
+          <time datetime="14:32">14:32</time>
+          <span>Monday</span>
+          <p style="margin: 0.75rem 0 0; font-size: 0.85rem; color: var(--ink-muted)">
+            Afternoon light · household rhythm
+          </p>
+        </div>
+        <span class="hero__label">Einq app · refreshes on schedule</span>
+      </div>
+    </header>
+
+    <hr class="divider" />
+
+    <section id="platform" class="section wrap">
+      <p class="eyebrow">Platform</p>
+      <h2>Calm by design</h2>
+      <p class="lede lede--wide">
+        E-paper is slow, reflective, and kind to batteries. Einq treats that as a feature: surfaces
+        update when meaning changes — morning vs evening, weekday vs weekend — not on every notification.
+      </p>
+      <div class="grid grid--3" style="margin-top: 1.75rem">
+        <article class="card">
+          <h3>Time-aware</h3>
+          <p class="muted">
+            Apps schedule partial or full refreshes by clock, calendar, or cron-like rules. The screen
+            is a function of day and time.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Open stack</h3>
+          <p class="muted">
+            CrossPoint on ESP32-C3: EPUB reading today, WiFi upload, OTA — and a path toward custom
+            Einq sketches alongside reader mode.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Castalia apps</h3>
+          <p class="muted">
+            First-party apps in the <code>einq</code> repo — shared assets, build notes, and examples
+            you can fork for your own household.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="hardware" class="section section--alt">
+      <div class="wrap">
+        <p class="eyebrow">Hardware</p>
+        <h2>Xteink X4</h2>
+        <p class="lede lede--wide">
+          Our first supported device: a compact 4.3″ e-paper reader. Stock firmware is fine for basic
+          files; we recommend CrossPoint for EPUB, customization, and development.
+        </p>
+        <div class="grid grid--2" style="margin-top: 1.5rem">
+          <article class="card">
+            <h3>Flash CrossPoint</h3>
+            <ul class="muted">
+              <li>
+                Web flasher:
+                <a href="https://xteink.dve.al/">xteink.dve.al</a> (Chromium)
+              </li>
+              <li>CLI: <code>esptool</code> per upstream docs</li>
+              <li>Official firmware can be restored</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Why open firmware</h3>
+            <p class="muted" style="margin: 0">
+              Community-driven, MIT-licensed, PlatformIO-based. You own the toolchain and can ship
+              screen logic that runs on a schedule — the core Einq use case.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="apps" class="section wrap">
+      <p class="eyebrow">Applications</p>
+      <h2>What we are building</h2>
+      <div class="grid grid--2" style="margin-top: 1.25rem">
+        <article class="card">
+          <h3>Clock &amp; day face</h3>
+          <p class="muted">
+            Large time, weekday, and optional secondary line (quote, transit, ritual). Full refresh at
+            day boundaries; partial refresh on the hour.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Household rhythm</h3>
+          <p class="muted">
+            Integrations with Castalia calendars and contemplative tools — ambient awareness without
+            another glowing rectangle.
+          </p>
+        </article>
+      </div>
+      <p class="muted" style="margin-top: 1.5rem">
+        App sources live in
+        <a href="https://github.com/CastaliaInstitute/einq/tree/main/apps">apps/</a> on GitHub.
+        See <a href="develop.html">Develop</a> for the programming model.
+      </p>
+    </section>
+
+    <footer class="footer wrap">
+      <p>
+        <a href="https://castalia.institute">Castalia Institute</a> ·
+        <a href="https://github.com/CastaliaInstitute/einq">einq on GitHub</a> ·
+        <a href="develop.html">Develop</a>
+      </p>
+    </footer>
+  </body>
+</html>

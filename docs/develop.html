@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f1ea" />
+    <title>Develop — Einq</title>
+    <meta
+      name="description"
+      content="How to build Einq apps on Xteink X4 with CrossPoint Reader: time-based screen updates, scheduling, and project layout."
+    />
+    <link rel="canonical" href="https://einq.castalia.institute/develop.html" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital@0;1&family=Source+Sans+3:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <nav class="nav" aria-label="Primary">
+        <a class="nav__brand" href="/">Einq</a>
+        <div class="nav__links">
+          <a href="/#platform">Platform</a>
+          <a href="/#hardware">Hardware</a>
+          <a href="develop.html" aria-current="page">Develop</a>
+          <a href="https://github.com/CastaliaInstitute/einq">GitHub</a>
+        </div>
+      </nav>
+    </div>
+
+    <main class="section wrap">
+      <p class="eyebrow">Develop</p>
+      <h1>Build a time-aware screen</h1>
+      <p class="lede lede--wide">
+        An Einq app is firmware logic that decides <em>what</em> to draw and <em>when</em> to refresh
+        e-paper. The canonical example: show the current time and weekday, re-render on the hour, and
+        swap layout or copy at day boundaries.
+      </p>
+
+      <h2 style="margin-top: 2rem">1. Start from CrossPoint</h2>
+      <p>
+        Flash
+        <a href="https://github.com/crosspoint-reader/crosspoint-reader">CrossPoint Reader</a>
+        on your X4 (see
+        <a href="https://xteink.dve.al/">web flasher</a> or PlatformIO upstream). Clone CrossPoint
+        for day-to-day reader work; use this repo for Castalia-specific apps and docs.
+      </p>
+
+      <h2 style="margin-top: 2rem">2. Programming model</h2>
+      <ul>
+        <li><strong>Render</strong> — compose a framebuffer (text, bitmaps, simple shapes). E-paper likes high contrast and infrequent updates.</li>
+        <li><strong>Schedule</strong> — wake on RTC alarm, timer, or light sleep until the next boundary (hour, sunrise, cron rule).</li>
+        <li><strong>Refresh policy</strong> — partial refresh when only digits change; full refresh at day change or ghosting threshold.</li>
+        <li><strong>Power</strong> — deep sleep between updates; WiFi only when syncing content.</li>
+      </ul>
+
+      <h2 style="margin-top: 2rem">3. Sketch: screen as f(day, time)</h2>
+      <p>Pseudocode for a clock face app:</p>
+      <pre><code>void loop() {
+  DateTime now = rtc.now();
+  if (needs_full_refresh(now)) {
+    draw_day_header(now);      // weekday, optional quote
+    draw_time_large(now);
+    eink.fullUpdate();
+  } else if (minute_changed(now)) {
+    draw_time_large(now);      // partial update region
+    eink.partialUpdate(time_region);
+  }
+  sleep_until(next_event(now)); // e.g. next hour or next minute
+}
+
+Event next_event(DateTime t) {
+  if (t.minute() == 0) return top_of_hour(t);
+  return next_minute(t);
+}</code></pre>
+      <p class="muted">
+        Real implementations live in PlatformIO/C++ against CrossPoint’s display drivers. We will add a
+        reference app under <code>apps/clock-face/</code> as the tree matures.
+      </p>
+
+      <h2 style="margin-top: 2rem">4. Repo layout</h2>
+      <pre><code>einq/
+  apps/           # one folder per Einq app
+  firmware/       # shared helpers, board notes
+  docs/           # this site</code></pre>
+
+      <h2 style="margin-top: 2rem">5. Contribute</h2>
+      <p>
+        Open issues and PRs on
+        <a href="https://github.com/CastaliaInstitute/einq">CastaliaInstitute/einq</a>. For CrossPoint
+        bugs or reader features, contribute upstream.
+      </p>
+
+      <div class="btn-row">
+        <a class="btn btn--primary" href="https://github.com/CastaliaInstitute/einq/tree/main/apps">apps/</a>
+        <a class="btn btn--ghost" href="/">Back to Einq</a>
+      </div>
+    </main>
+
+    <footer class="footer wrap">
+      <p><a href="https://castalia.institute">Castalia Institute</a></p>
+    </footer>
+  </body>
+</html>

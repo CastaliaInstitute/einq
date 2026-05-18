@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f4f1ea"/>
+  <rect x="80" y="80" width="1040" height="470" rx="8" fill="#ebe6dc" stroke="#1a1a18" stroke-width="3"/>
+  <text x="120" y="200" font-family="Georgia, serif" font-size="56" fill="#1a1a18">Einq</text>
+  <text x="120" y="270" font-family="system-ui, sans-serif" font-size="28" fill="#5c5a54">Castalia e-paper platform</text>
+  <text x="120" y="420" font-family="Georgia, serif" font-size="36" fill="#1a1a18">14:32</text>
+  <text x="120" y="470" font-family="system-ui, sans-serif" font-size="22" fill="#8a877e">Monday · calm surfaces</text>
+</svg>
