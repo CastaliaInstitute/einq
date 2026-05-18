@@ -49,9 +49,8 @@
           and anything that should change with the day — not demand your attention like a phone.
         </p>
         <p class="lede lede--wide">
-          We start with the <strong>Xteink X4</strong> and
-          <a href="https://github.com/crosspoint-reader/crosspoint-reader">CrossPoint Reader</a>,
-          an open-source firmware stack you can flash, extend, and restore.
+          We use the <strong>Xteink X4</strong> as dedicated e-paper hardware — not as an e-reader.
+          Einq firmware shows inquiry cards and calm reminders; reading books is out of scope.
         </p>
         <div class="btn-row">
           <a class="btn btn--primary" href="develop.html">Start developing</a>
@@ -111,26 +110,21 @@
         <p class="eyebrow">Hardware</p>
         <h2>Xteink X4</h2>
         <p class="lede lede--wide">
-          Our first supported device: a compact 4.3″ e-paper reader. Stock firmware is fine for basic
-          files; we recommend CrossPoint for EPUB, customization, and development.
+          Our first device: a compact 4.3″ e-paper panel on ESP32-C3. We build
+          <strong>Einq firmware</strong> on the open X4 SDK — ambient faces only, not EPUB or library UX.
         </p>
         <div class="grid grid--2" style="margin-top: 1.5rem">
           <article class="card">
-            <h3>Flash CrossPoint</h3>
-            <ul class="muted">
-              <li>
-                Web flasher:
-                <a href="https://xteink.dve.al/">xteink.dve.al</a> (Chromium)
-              </li>
-              <li>CLI: <code>esptool</code> per upstream docs</li>
-              <li>Official firmware can be restored</li>
-            </ul>
+            <h3>Open stack</h3>
+            <p class="muted" style="margin: 0">
+              PlatformIO, community hardware libraries, USB flash with
+              <code>esptool</code>. CrossPoint was lab bring-up only; product code is Einq.
+            </p>
           </article>
           <article class="card">
-            <h3>Why open firmware</h3>
+            <h3>Always-on surface</h3>
             <p class="muted" style="margin: 0">
-              Community-driven, MIT-licensed, PlatformIO-based. You own the toolchain and can ship
-              screen logic that runs on a schedule — the core Einq use case.
+              Boots to inq cards and scheduled content. WiFi for sync and OTA, not for “checking email.”
             </p>
           </article>
         </div>
@@ -140,19 +134,23 @@
     <section id="apps" class="section wrap">
       <p class="eyebrow">Applications</p>
       <h2>What we are building</h2>
-      <div class="grid grid--2" style="margin-top: 1.25rem">
+      <div class="grid grid--3" style="margin-top: 1.25rem">
         <article class="card">
-          <h3>Clock &amp; day face</h3>
+          <h3>Inq cards</h3>
           <p class="muted">
-            Large time, weekday, and optional secondary line (quote, transit, ritual). Full refresh at
-            day boundaries; partial refresh on the hour.
+            Through the day: a person, place, or thing — one card at a time, with a monochrome Noto Emoji glyph and a few lines of text.
           </p>
         </article>
         <article class="card">
-          <h3>Household rhythm</h3>
+          <h3>Quotes &amp; reminders</h3>
           <p class="muted">
-            Integrations with Castalia calendars and contemplative tools — ambient awareness without
-            another glowing rectangle.
+            Faculty quotes, mindfulness prompts, and gentle time-of-day context — rotated on a schedule, not as alerts.
+          </p>
+        </article>
+        <article class="card">
+          <h3>Room rhythm</h3>
+          <p class="muted">
+            Morning, day, and evening faces. E-paper stays calm; WiFi only when syncing new content.
           </p>
         </article>
       </div>

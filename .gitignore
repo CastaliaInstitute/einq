@@ -1,5 +1,8 @@
 .DS_Store
 .env
+.cache/
+.vendor/
+.venv-pio/
 *.pyc
 __pycache__/
 .pio/

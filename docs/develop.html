@@ -40,13 +40,13 @@
         swap layout or copy at day boundaries.
       </p>
 
-      <h2 style="margin-top: 2rem">1. Start from CrossPoint</h2>
+      <h2 style="margin-top: 2rem">1. Hardware &amp; stack</h2>
       <p>
-        Flash
-        <a href="https://github.com/crosspoint-reader/crosspoint-reader">CrossPoint Reader</a>
-        on your X4 (see
-        <a href="https://xteink.dve.al/">web flasher</a> or PlatformIO upstream). Clone CrossPoint
-        for day-to-day reader work; use this repo for Castalia-specific apps and docs.
+        <strong>Xteink X4</strong> (ESP32-C3, 4.3″ e-paper). Einq is not a reader — no book UI. Firmware
+        uses the open
+        <a href="https://github.com/crosspoint-reader/community-sdk">X4 community SDK</a>
+        (display, buttons, power). CrossPoint was optional bring-up; new apps live in this repo under
+        <code>apps/</code>.
       </p>
 
       <h2 style="margin-top: 2rem">2. Programming model</h2>

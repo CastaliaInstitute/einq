@@ -1,28 +1,28 @@
 # Einq apps
 
-Each subdirectory is one installable or flashable **Einq application** — firmware that owns the e-paper surface on a supported device.
+Each subdirectory is one **Einq application** — firmware or assets for the ambient e-paper face on X4.
 
-## Planned apps
+**Product direction:** [docs/VISION.md](../docs/VISION.md) — inq cards, quotes, mindfulness reminders, scheduled through the day. Schema and APIs later.
 
-| App | Purpose |
-|-----|---------|
-| `clock-face/` | Time + weekday; partial refresh each minute, full refresh at day change |
-| *(your app)* | Fork this table row when you add a folder |
+## Apps
+
+| App | Status | Role |
+|-----|--------|------|
+| `clock-face/` | Demo | Boot face, time + weekday; proves schedule + display |
+| `inq-face/` | Planned | Day-long rotation: inq cards, quotes, reminders |
 
 ## Conventions
 
-- **PlatformIO** / ESP32-C3 unless noted otherwise
-- Target **CrossPoint Reader** display APIs where possible, or document fork points
-- Document refresh policy (partial vs full) in each app’s README
-- No secrets in repo — use `secrets.ini` locally (gitignored) for WiFi if needed
+- **PlatformIO** / ESP32-C3; extend CrossPoint or ship a dedicated face firmware
+- Document refresh policy (partial vs full) per app
+- Content packs: prefer SD or synced JSON later; no secrets in repo
 
-## Time-based updates
+## Scheduling
 
-Apps should compute the next wake time from wall clock or NTP-synced RTC:
+Apps choose the next wake from wall clock (and eventually NTP):
 
-- Minute tick for clocks
-- Hour boundary for coarser faces
-- Calendar rules (weekday vs weekend layout)
-- Optional external sync (Castalia API) on a longer interval
+- Card / quote rotation (hourly or few times per day)
+- Part-of-day layout (morning / day / evening)
+- Minute tick only when showing live time
 
-See [develop.html](https://einq.castalia.institute/develop.html) on the site.
+See [develop.html](https://einq.castalia.institute/develop.html).
