@@ -1,13 +1,19 @@
 #pragma once
 
 #include "activities/Activity.h"
+#include "einq-ble/EinqDisplaySnapshot.h"
 
-/** Castalia Einq demo: large clock face; refreshes each minute. Back with Confirm. */
+/** Castalia Einq demo: clock face or BLE-driven message; refreshes each minute in clock mode. */
 class EinqClockActivity final : public Activity {
   unsigned long lastDrawMs = 0;
   int lastMinute = -1;
+  bool messageMode = false;
+  EinqDisplaySnapshot messageSnapshot {};
 
+  void drawClockFace(const struct tm& localTime);
+  void drawMessageFace();
   void drawFace();
+  void publishSnapshot(const struct tm* localTime);
 
  public:
   explicit EinqClockActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

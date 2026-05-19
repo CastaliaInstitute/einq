@@ -5,14 +5,36 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CP="${CROSSPOINT_DIR:-$ROOT/.vendor/crosspoint-reader}"
 PATCH="$ROOT/apps/clock-face/patch"
+EINQ_VERSION_FILE="$ROOT/firmware/einq-version"
+EINQ_VERSION="${EINQ_VERSION:-}"
+if [[ -z "$EINQ_VERSION" && -f "$EINQ_VERSION_FILE" ]]; then
+  EINQ_VERSION="$(tr -d '[:space:]' <"$EINQ_VERSION_FILE")"
+fi
 
 if [[ ! -d "$CP/src" ]]; then
   echo "error: CrossPoint not found at $CP (clone with git submodule or set CROSSPOINT_DIR)" >&2
   exit 1
 fi
 
-mkdir -p "$CP/src/activities/einq"
+mkdir -p "$CP/src/activities/einq" "$CP/src/einq-ble"
 cp "$PATCH/EinqClockActivity.h" "$PATCH/EinqClockActivity.cpp" "$CP/src/activities/einq/"
+cp "$ROOT/firmware/einq-ble/"*.h "$ROOT/firmware/einq-ble/"*.cpp "$CP/src/einq-ble/"
+
+PIO_INI="$CP/platformio.ini"
+if ! grep -q 'NimBLE-Arduino' "$PIO_INI"; then
+  python3 - "$PIO_INI" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+needle = "  links2004/WebSockets @ 2.7.3\n"
+insert = needle + "  h2zero/NimBLE-Arduino @ ^2.2.0\n"
+if needle not in text:
+    raise SystemExit("platformio.ini: could not find lib_deps anchor")
+path.write_text(text.replace(needle, insert, 1))
+print("patched platformio.ini (NimBLE-Arduino)")
+PY
+fi
 
 # Home menu: add Einq Clock entry (idempotent markers).
 HOME_CPP="$CP/src/activities/home/HomeActivity.cpp"
@@ -155,4 +177,43 @@ print("patched ActivityManager")
 PY
 fi
 
-echo "Einq clock patch applied (auto-start on boot; Back → CrossPoint home)"
+# OTA: GitHub releases on CastaliaInstitute/einq (asset must be named firmware.bin).
+OTA_CPP="$CP/src/network/OtaUpdater.cpp"
+if ! grep -q 'CastaliaInstitute/einq' "$OTA_CPP"; then
+  python3 - "$OTA_CPP" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+old = (
+    'constexpr char latestReleaseUrl[] = '
+    '"https://api.github.com/repos/crosspoint-reader/crosspoint-reader/releases/latest";'
+)
+new = (
+    'constexpr char latestReleaseUrl[] = '
+    '"https://api.github.com/repos/CastaliaInstitute/einq/releases/latest";'
+)
+text = path.read_text()
+if old not in text:
+    raise SystemExit("OtaUpdater.cpp: expected upstream release URL")
+path.write_text(text.replace(old, new, 1))
+print("patched OtaUpdater.cpp (OTA → CastaliaInstitute/einq)")
+PY
+fi
+
+if [[ -n "$EINQ_VERSION" ]]; then
+  python3 - "$CP/platformio.ini" "$EINQ_VERSION" <<'PY'
+from pathlib import Path
+import re
+import sys
+path = Path(sys.argv[1])
+version = sys.argv[2]
+text = path.read_text()
+text, n = re.subn(r"(?m)^version = .+$", f"version = {version}", text, count=1, flags=re.MULTILINE)
+if n != 1:
+    raise SystemExit("platformio.ini: could not set [crosspoint] version")
+path.write_text(text)
+print(f"set CrossPoint/Einq firmware version to {version}")
+PY
+fi
+
+echo "Einq patch applied (clock + BLE GATT; auto-start on boot; Back → CrossPoint home)"

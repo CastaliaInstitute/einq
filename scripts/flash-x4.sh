@@ -55,7 +55,7 @@ echo "Flashing $FW_BIN @ 0x10000 …"
 esptool.py --chip esp32c3 --port "$PORT" --baud "$BAUD" write_flash 0x10000 "$FW_BIN"
 
 if [[ "$USE_PATCH" == "1" ]]; then
-  echo "Done. On device: Home → Einq Clock"
+  echo "Done. Boots to Einq clock; OTA via Settings → System → Check for updates"
 else
   echo "Done. CrossPoint 1.3.0 installed. Copy apps/clock-face/sd/sleep.bmp to SD (see apps/clock-face/README.md)."
 fi

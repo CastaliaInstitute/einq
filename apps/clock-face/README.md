@@ -15,6 +15,37 @@ Requires PlatformIO + [pioarduino](https://github.com/pioarduino/pioarduino) per
 
 Patch sources: `apps/clock-face/patch/`
 
+### BLE
+
+When built with the patch, the device advertises as **Einq** and exposes a GATT service to read the current face (clock or message) and push a simple text display. See [firmware/einq-ble/README.md](../../firmware/einq-ble/README.md).
+
+```bash
+pip install bleak
+python3 scripts/ble-einq-probe.py
+python3 scripts/ble-einq-probe.py --show '{"mode":"message","title":"Einq","line1":"Hello"}'
+```
+
+## WiFi (demo)
+
+CrossPoint stores WiFi on the **SD card** at `/.crosspoint/wifi.json` (not ESP NVS). For the Chateau demo:
+
+```bash
+chmod +x scripts/setup-wifi-sd.py
+./scripts/setup-wifi-sd.py --from-device
+# When the SD volume is mounted:
+./scripts/setup-wifi-sd.py --from-device --mount /Volumes/YOUR_SD
+```
+
+Default SSID/password: **The Chateau** / **thechateau**. Staging file: `apps/clock-face/sd/.crosspoint/wifi.json`.
+
+With the Einq clock patch, the face loads that file on boot, connects, and runs NTP so the clock can show real time.
+
+## OTA updates
+
+Patched firmware checks **CastaliaInstitute/einq** GitHub Releases (not upstream CrossPoint). On device: **Settings → System → Check for updates** (WiFi required).
+
+Maintainers: see [docs/OTA.md](../../docs/OTA.md) (tag `1.4.0`, asset `firmware.bin`).
+
 ## B. SD card sleep demo (stock CrossPoint)
 
 Works on the **CrossPoint 1.3.0** image already flashed without the patch.

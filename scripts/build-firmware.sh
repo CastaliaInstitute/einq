@@ -22,5 +22,5 @@ if [[ ! -d "$CP/src" ]]; then
 fi
 
 bash "$ROOT/scripts/apply-einq-clock-patch.sh"
-"$PIO" run -d "$CP"
-echo "Built: $CP/.pio/build/default/firmware.bin"
+"$PIO" run -d "$CP" -e gh_release
+echo "Built: $CP/.pio/build/gh_release/firmware.bin"

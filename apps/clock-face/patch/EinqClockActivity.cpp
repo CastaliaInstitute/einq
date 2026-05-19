@@ -2,29 +2,99 @@
 
 #include <GfxRenderer.h>
 #include <I18n.h>
+#include <WiFi.h>
+#include <esp_sntp.h>
 
 #include <ctime>
 
+#include "WifiCredentialStore.h"
 #include "components/UITheme.h"
+#include "einq-ble/EinqBle.h"
 #include "fontIds.h"
 
 namespace {
+constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 30000;
+
+bool wifiBootstrapStarted = false;
+bool ntpSyncAttempted = false;
+bool redrawAfterNtp = false;
+unsigned long wifiBootstrapStartMs = 0;
+
+void syncTimeWithNTP() {
+  if (esp_sntp_enabled()) {
+    esp_sntp_stop();
+  }
+  esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
+  esp_sntp_setservername(0, "pool.ntp.org");
+  esp_sntp_init();
+
+  int retry = 0;
+  constexpr int maxRetries = 15;
+  while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && retry < maxRetries) {
+    delay(200);
+    retry++;
+  }
+}
+
+void tickWifiAndNtp() {
+  if (ntpSyncAttempted) {
+    return;
+  }
+
+  if (!wifiBootstrapStarted) {
+    WIFI_STORE.loadFromFile();
+    std::string ssid = WIFI_STORE.getLastConnectedSsid();
+    const WifiCredential* cred = nullptr;
+    if (!ssid.empty()) {
+      cred = WIFI_STORE.findCredential(ssid);
+    }
+    if (cred == nullptr && !WIFI_STORE.getCredentials().empty()) {
+      cred = &WIFI_STORE.getCredentials().front();
+      ssid = cred->ssid;
+    }
+    if (cred == nullptr || ssid.empty()) {
+      return;
+    }
+
+    WiFi.persistent(false);
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect(true, true);
+    delay(100);
+    WiFi.begin(ssid.c_str(), cred->password.c_str());
+    wifiBootstrapStarted = true;
+    wifiBootstrapStartMs = millis();
+    return;
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    if (millis() - wifiBootstrapStartMs > WIFI_CONNECT_TIMEOUT_MS) {
+      ntpSyncAttempted = true;
+    }
+    return;
+  }
+
+  syncTimeWithNTP();
+  ntpSyncAttempted = true;
+  redrawAfterNtp = true;
+}
+
 bool validWallClock(const struct tm& t) { return t.tm_year + 1900 >= 2024; }
 
 void formatClock(const struct tm& t, char* timeBuf, size_t timeLen, char* dayBuf, size_t dayLen) {
   strftime(timeBuf, timeLen, "%H:%M", &t);
   strftime(dayBuf, dayLen, "%A", &t);
 }
+
+void copySnapshotField(char* dest, size_t destLen, const char* src) {
+  strncpy(dest, src, destLen - 1);
+  dest[destLen - 1] = '\0';
+}
 }  // namespace
 
-void EinqClockActivity::drawFace() {
+void EinqClockActivity::drawClockFace(const struct tm& localTime) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int pageWidth = renderer.getScreenWidth();
   const int pageHeight = renderer.getScreenHeight();
-
-  time_t now = time(nullptr);
-  struct tm localTime {};
-  localtime_r(&now, &localTime);
 
   char timeStr[16];
   char dayStr[32];
@@ -59,10 +129,82 @@ void EinqClockActivity::drawFace() {
   renderer.displayBuffer();
 }
 
+void EinqClockActivity::drawMessageFace() {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int pageWidth = renderer.getScreenWidth();
+  const int pageHeight = renderer.getScreenHeight();
+
+  renderer.clearScreen();
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, messageSnapshot.title);
+
+  const int bodyFont = NOTOSANS_14_FONT_ID;
+  const int bodyH = renderer.getLineHeight(bodyFont);
+
+  int y = (pageHeight - bodyH) / 2;
+  if (messageSnapshot.line1[0] != '\0') {
+    renderer.drawCenteredText(bodyFont, y, messageSnapshot.line1, true);
+    y += bodyH + 8;
+  }
+  if (messageSnapshot.line2[0] != '\0') {
+    renderer.drawCenteredText(bodyFont, y, messageSnapshot.line2, true);
+    y += bodyH + 8;
+  }
+  if (messageSnapshot.line3[0] != '\0') {
+    renderer.drawCenteredText(bodyFont, y, messageSnapshot.line3, true);
+  }
+
+  const auto labels = mappedInput.mapLabels("CrossPoint", "", "", "");
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  renderer.displayBuffer();
+}
+
+void EinqClockActivity::publishSnapshot(const struct tm* localTime) {
+  EinqDisplaySnapshot snap {};
+  if (messageMode) {
+    copySnapshotField(snap.mode, sizeof(snap.mode), "message");
+    copySnapshotField(snap.title, sizeof(snap.title), messageSnapshot.title);
+    copySnapshotField(snap.line1, sizeof(snap.line1), messageSnapshot.line1);
+    copySnapshotField(snap.line2, sizeof(snap.line2), messageSnapshot.line2);
+    copySnapshotField(snap.line3, sizeof(snap.line3), messageSnapshot.line3);
+  } else if (localTime != nullptr) {
+    copySnapshotField(snap.mode, sizeof(snap.mode), "clock");
+    copySnapshotField(snap.title, sizeof(snap.title), "Einq");
+    formatClock(*localTime, snap.time, sizeof(snap.time), snap.day, sizeof(snap.day));
+    if (validWallClock(*localTime)) {
+      strftime(snap.date, sizeof(snap.date), "%Y-%m-%d", localTime);
+    }
+    if (!validWallClock(*localTime)) {
+      copySnapshotField(snap.line1, sizeof(snap.line1), "Connect WiFi to sync time");
+    }
+  }
+  EinqBle::setSnapshot(snap);
+  EinqBle::notifyDisplayChanged();
+}
+
+void EinqClockActivity::drawFace() {
+  time_t now = time(nullptr);
+  struct tm localTime {};
+  localtime_r(&now, &localTime);
+
+  if (messageMode) {
+    drawMessageFace();
+    publishSnapshot(nullptr);
+    return;
+  }
+
+  drawClockFace(localTime);
+  publishSnapshot(&localTime);
+}
+
 void EinqClockActivity::onEnter() {
   Activity::onEnter();
   lastDrawMs = 0;
   lastMinute = -1;
+  messageMode = false;
+  wifiBootstrapStarted = false;
+  ntpSyncAttempted = false;
+  redrawAfterNtp = false;
+  EinqBle::begin();
   drawFace();
 }
 
@@ -73,6 +215,28 @@ void EinqClockActivity::loop() {
     return;
   }
 
+  EinqDisplayCommand cmd {};
+  if (EinqBle::takeCommand(cmd)) {
+    if (strcmp(cmd.mode, "clock") == 0) {
+      messageMode = false;
+    } else if (strcmp(cmd.mode, "message") == 0) {
+      messageMode = true;
+      copySnapshotField(messageSnapshot.mode, sizeof(messageSnapshot.mode), "message");
+      copySnapshotField(messageSnapshot.title, sizeof(messageSnapshot.title), cmd.title);
+      copySnapshotField(messageSnapshot.line1, sizeof(messageSnapshot.line1), cmd.line1);
+      copySnapshotField(messageSnapshot.line2, sizeof(messageSnapshot.line2), cmd.line2);
+      copySnapshotField(messageSnapshot.line3, sizeof(messageSnapshot.line3), cmd.line3);
+    }
+    drawFace();
+  }
+
+  if (messageMode) {
+    delay(200);
+    return;
+  }
+
+  tickWifiAndNtp();
+
   const unsigned long nowMs = millis();
   time_t now = time(nullptr);
   struct tm localTime {};
@@ -81,7 +245,8 @@ void EinqClockActivity::loop() {
   const bool minuteTick = localTime.tm_min != lastMinute;
   const bool periodic = nowMs - lastDrawMs >= 30000;
 
-  if (minuteTick || periodic) {
+  if (redrawAfterNtp || minuteTick || periodic) {
+    redrawAfterNtp = false;
     lastMinute = localTime.tm_min;
     lastDrawMs = nowMs;
     drawFace();

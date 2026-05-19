@@ -1,0 +1,77 @@
+# Build gh_release firmware and publish to GitHub Releases for OTA.
+name: Release Einq firmware
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semver release (e.g. 1.4.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+          VERSION="${VERSION#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "error: version must be major.minor.patch, got: $VERSION" >&2
+            exit 1
+          fi
+          echo "$VERSION" > firmware/einq-version
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: $VERSION"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install pioarduino PlatformIO
+        run: |
+          uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+          uv pip install --system 'littlefs-python>=0.16.0' 'fatfs-ng>=0.1.14'
+
+      - name: Clone CrossPoint
+        run: git clone --depth 1 --recursive https://github.com/crosspoint-reader/crosspoint-reader.git .vendor/crosspoint-reader
+
+      - name: Apply Einq patch
+        env:
+          EINQ_VERSION: ${{ steps.ver.outputs.version }}
+        run: bash scripts/apply-einq-clock-patch.sh
+
+      - name: Build release firmware
+        working-directory: .vendor/crosspoint-reader
+        run: pio run -e gh_release | tee pio.log
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.ver.outputs.version }}"
+          FW=".vendor/crosspoint-reader/.pio/build/gh_release/firmware.bin"
+          test -f "$FW"
+          gh release view "$TAG" 2>/dev/null && gh release delete "$TAG" --yes || true
+          gh release create "$TAG" "$FW" \
+            --title "Einq firmware $TAG" \
+            --notes "Xteink X4 (ESP32-C3) Einq build. OTA: Settings → System → Check for updates.
+
+Built from commit ${{ github.sha }}."

@@ -40,9 +40,9 @@ jobs:
 
       - name: Build
         working-directory: .vendor/crosspoint-reader
-        run: pio run | tee pio.log
+        run: pio run -e gh_release | tee pio.log
 
       - uses: actions/upload-artifact@v4
         with:
           name: einq-firmware
-          path: .vendor/crosspoint-reader/.pio/build/default/firmware.bin
+          path: .vendor/crosspoint-reader/.pio/build/gh_release/firmware.bin

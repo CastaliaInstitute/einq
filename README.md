@@ -28,6 +28,10 @@ apps/           # Einq applications (screen logic, assets)
 firmware/       # Shared firmware helpers / integration notes
 ```
 
+## Firmware OTA
+
+Einq-patched images update over WiFi from [GitHub Releases](https://github.com/CastaliaInstitute/einq/releases) (`firmware.bin`). On device: **Settings → System → Check for updates**. See [docs/OTA.md](docs/OTA.md).
+
 ## Site & deploy
 
 Static pages live in `docs/`. GitHub Actions deploys to GitHub Pages on push to `main`.

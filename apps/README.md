@@ -8,7 +8,7 @@ Each subdirectory is one **Einq application** — firmware or assets for the amb
 
 | App | Status | Role |
 |-----|--------|------|
-| `clock-face/` | Demo | Boot face, time + weekday; proves schedule + display |
+| `clock-face/` | Demo | Boot face, time + weekday; BLE read/write display surface |
 | `inq-face/` | Planned | Day-long rotation: inq cards, quotes, reminders |
 
 ## Conventions
