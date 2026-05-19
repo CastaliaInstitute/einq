@@ -63,7 +63,9 @@ jobs:
 
       - name: Build release firmware
         working-directory: .vendor/crosspoint-reader
-        run: pio run -e gh_release | tee pio.log
+        run: |
+          set -o pipefail
+          pio run -e gh_release 2>&1 | tee pio.log
 
       - name: Publish GitHub Release
         env:

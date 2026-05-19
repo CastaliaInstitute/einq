@@ -40,7 +40,9 @@ jobs:
 
       - name: Build
         working-directory: .vendor/crosspoint-reader
-        run: pio run -e gh_release | tee pio.log
+        run: |
+          set -o pipefail
+          pio run -e gh_release 2>&1 | tee pio.log
 
       - uses: actions/upload-artifact@v4
         with:
