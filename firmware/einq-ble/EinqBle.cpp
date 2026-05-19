@@ -141,7 +141,6 @@ void EinqBle::begin() {
 
   NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
   advertising->addServiceUUID(kServiceUuid);
-  advertising->setScanResponse(true);
   advertising->start();
 }
 
