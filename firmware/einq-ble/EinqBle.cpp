@@ -107,9 +107,9 @@ class DisplayStateCallbacks : public NimBLECharacteristicCallbacks {
 
 class DisplayCmdCallbacks : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic* characteristic, NimBLEConnInfo& /*connInfo*/) override {
-    const NimBLEAttValue& value = characteristic->getAttVal();
+    const std::string value = characteristic->getValue();
     EinqDisplayCommand cmd {};
-    if (!parseDisplayCommand(value.data(), value.length(), cmd)) {
+    if (!parseDisplayCommand(reinterpret_cast<const uint8_t*>(value.data()), value.size(), cmd)) {
       return;
     }
     {
