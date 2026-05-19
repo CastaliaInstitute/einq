@@ -18,6 +18,8 @@ permissions:
 
 jobs:
   release:
+    # Avoid spurious failures when the workflow file is pushed to main (GitHub Actions quirk).
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,6 +75,4 @@ jobs:
           gh release view "$TAG" 2>/dev/null && gh release delete "$TAG" --yes || true
           gh release create "$TAG" "$FW" \
             --title "Einq firmware $TAG" \
-            --notes "Xteink X4 (ESP32-C3) Einq build. OTA: Settings → System → Check for updates.
-
-Built from commit ${{ github.sha }}."
+            --notes "Xteink X4 (ESP32-C3) Einq build. OTA: Settings - System - Check for updates. Built from commit ${{ github.sha }}."
