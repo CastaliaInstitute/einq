@@ -25,7 +25,7 @@ Full UUIDs:
 **Clock mode** (default):
 
 ```json
-{"mode":"clock","title":"Einq","time":"14:30","day":"Monday","date":"2026-05-18"}
+{"mode":"clock","title":"Einq","time":"14:30","day":"Monday","date":"2026-05-18","glyph":"person"}
 ```
 
 When time is unsynced, `line1` may be `"Connect WiFi to sync time"`.

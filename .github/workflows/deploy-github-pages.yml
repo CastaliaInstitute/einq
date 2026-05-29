@@ -1,4 +1,4 @@
-# Publish static site from docs/. Repo Settings → Pages → Source: GitHub Actions.
+# Publish static site from docs/ plus OTA firmware manifest/binary when available.
 
 name: Deploy GitHub Pages
 
@@ -7,7 +7,9 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - "firmware/einq-version"
       - "README.md"
+      - "scripts/bundle-pages-site.sh"
       - ".github/workflows/deploy-github-pages.yml"
   workflow_dispatch:
 
@@ -28,9 +30,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Bundle site + firmware
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x scripts/bundle-pages-site.sh
+          bash scripts/bundle-pages-site.sh _pages
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: _pages
       - uses: actions/deploy-pages@v4
         id: deployment

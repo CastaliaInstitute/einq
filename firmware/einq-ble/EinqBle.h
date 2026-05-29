@@ -10,4 +10,6 @@ class EinqBle {
   /** Returns true once per received BLE write; clears the pending flag. */
   static bool takeCommand(EinqDisplayCommand& out);
   static void notifyDisplayChanged();
+  static void suspendForSleep();
+  static void resumeAfterSleep();
 };

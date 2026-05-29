@@ -87,6 +87,9 @@ size_t snapshotToJson(const EinqDisplaySnapshot& snap, char* buf, size_t bufLen)
   if (snap.date[0] != '\0') {
     doc["date"] = snap.date;
   }
+  if (snap.glyph[0] != '\0') {
+    doc["glyph"] = snap.glyph;
+  }
   return serializeJson(doc, buf, bufLen);
 }
 
@@ -170,4 +173,18 @@ void EinqBle::notifyDisplayChanged() {
   }
   gStateChar->setValue(reinterpret_cast<const uint8_t*>(json), strlen(json));
   gStateChar->notify();
+}
+
+void EinqBle::suspendForSleep() {
+  NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+  if (advertising != nullptr) {
+    advertising->stop();
+  }
+}
+
+void EinqBle::resumeAfterSleep() {
+  NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+  if (advertising != nullptr) {
+    advertising->start();
+  }
 }

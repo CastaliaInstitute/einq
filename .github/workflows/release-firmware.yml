@@ -15,6 +15,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   release:
@@ -80,4 +82,18 @@ jobs:
           git push origin ":refs/tags/${TAG}" 2>/dev/null || true
           gh release create "$TAG" "$FW" \
             --title "Einq firmware ${TAG}" \
-            --notes "Xteink X4 (ESP32-C3) Einq build. OTA: Settings - System - Check for updates. Built from commit ${{ github.sha }}."
+            --notes "Xteink X4 (ESP32-C3) Einq build. OTA: Settings - System - Check for updates, or midnight auto-update from einq.castalia.institute. Built from commit ${{ github.sha }}."
+
+      - name: Deploy GitHub Pages (site + firmware OTA)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EINQ_FIRMWARE: .vendor/crosspoint-reader/.pio/build/gh_release/firmware.bin
+        run: |
+          chmod +x scripts/bundle-pages-site.sh
+          bash scripts/bundle-pages-site.sh _pages
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _pages
+      - uses: actions/deploy-pages@v4

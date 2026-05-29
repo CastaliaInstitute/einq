@@ -40,6 +40,22 @@ Default SSID/password: **The Chateau** / **thechateau**. Staging file: `apps/clo
 
 With the Einq clock patch, the face loads that file on boot, connects, and runs NTP so the clock can show real time.
 
+### Scheduled wake (glyph + clock)
+
+The Einq face **light-sleeps** between updates (CrossPoint deep sleep is disabled while the face is active). It wakes on:
+
+- **Each minute** — refresh the clock
+- **Midnight** — rotate the daily **iNQ glyph** (person / place / thing by day-of-year)
+- **Power button** — same as any wake from light sleep
+
+Requires NTP-synced wall time (WiFi once at boot). Long-press power still enters CrossPoint deep sleep (manual).
+
+**Card of the Day:** when WiFi is available, the face syncs from `https://cards.castalia.institute/card-of-the-day/YYYY-MM-DD.json` (7-year arc + Candlemas seasons — same schedule as iNQ Cards). Cached on SD at `/.einq/cotd/`. See [apps/inq-face/COTD.md](../inq-face/COTD.md).
+
+**Midnight OTA:** checks `https://einq.castalia.institute/firmware.json` once per day at the day boundary; installs newer firmware automatically from GitHub Pages. Manual updates still use Settings → System → Check for updates (GitHub Releases). See [docs/OTA.md](../../docs/OTA.md).
+
+**Note:** X4 deep sleep cuts MCU power on battery, so timer wake only works in this light-sleep path — not in CrossPoint’s stock deep sleep screen.
+
 ## OTA updates
 
 Patched firmware checks **CastaliaInstitute/einq** GitHub Releases (not upstream CrossPoint). On device: **Settings → System → Check for updates** (WiFi required).

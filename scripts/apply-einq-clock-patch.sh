@@ -16,9 +16,13 @@ if [[ ! -d "$CP/src" ]]; then
   exit 1
 fi
 
-mkdir -p "$CP/src/activities/einq" "$CP/src/einq-ble"
+mkdir -p "$CP/src/activities/einq" "$CP/src/einq-ble" "$CP/src/einq-schedule" "$CP/src/einq-glyph" "$CP/src/einq-cotd" "$CP/src/einq-ota"
 cp "$PATCH/EinqClockActivity.h" "$PATCH/EinqClockActivity.cpp" "$CP/src/activities/einq/"
 cp "$ROOT/firmware/einq-ble/"*.h "$ROOT/firmware/einq-ble/"*.cpp "$CP/src/einq-ble/"
+cp "$ROOT/firmware/einq-schedule/"*.h "$ROOT/firmware/einq-schedule/"*.cpp "$CP/src/einq-schedule/"
+cp "$ROOT/firmware/einq-glyph/"*.h "$ROOT/firmware/einq-glyph/"*.cpp "$CP/src/einq-glyph/"
+cp "$ROOT/firmware/einq-cotd/"*.h "$ROOT/firmware/einq-cotd/"*.cpp "$CP/src/einq-cotd/"
+cp "$ROOT/firmware/einq-ota/"*.h "$ROOT/firmware/einq-ota/"*.cpp "$CP/src/einq-ota/"
 
 PIO_INI="$CP/platformio.ini"
 if ! grep -q 'NimBLE-Arduino' "$PIO_INI"; then

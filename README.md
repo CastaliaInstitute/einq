@@ -30,7 +30,7 @@ firmware/       # Shared firmware helpers / integration notes
 
 ## Firmware OTA
 
-Einq-patched images update over WiFi from [GitHub Releases](https://github.com/CastaliaInstitute/einq/releases) (`firmware.bin`). On device: **Settings → System → Check for updates**. See [docs/OTA.md](docs/OTA.md).
+Einq-patched images update over WiFi from [GitHub Releases](https://github.com/CastaliaInstitute/einq/releases) (manual) or [einq.castalia.institute](https://einq.castalia.institute/firmware.json) (midnight auto-update on the Einq face). See [docs/OTA.md](docs/OTA.md).
 
 ## Site & deploy
 

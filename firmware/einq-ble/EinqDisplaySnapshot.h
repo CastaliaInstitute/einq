@@ -10,6 +10,7 @@ struct EinqDisplaySnapshot {
   static constexpr size_t kTimeLen = 8;
   static constexpr size_t kDayLen = 32;
   static constexpr size_t kDateLen = 16;
+  static constexpr size_t kGlyphLen = 16;
 
   char mode[kModeLen] = "clock";
   char title[kTitleLen] = "Einq";
@@ -19,6 +20,7 @@ struct EinqDisplaySnapshot {
   char time[kTimeLen] = {};
   char day[kDayLen] = {};
   char date[kDateLen] = {};
+  char glyph[kGlyphLen] = {};
 };
 
 /** Parsed display command from BLE write (show message or return to clock). */
