@@ -1,6 +1,7 @@
 #include "EinqCotd.h"
 
 #include <ArduinoJson.h>
+#include <FsHelpers.h>
 #include <HTTPClient.h>
 #include <HalStorage.h>
 #include <NetworkClientSecure.h>
