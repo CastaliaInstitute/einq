@@ -154,7 +154,18 @@ from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 text = path.read_text()
-text = text.replace("  void goHome();", "  void goHome();\n  void goToEinqClock();", 1)
+markers = (
+    "  void goHome(HomeMenuItem initialMenuItem = HomeMenuItem::NONE);\n",
+    "  void goHome();\n",
+)
+for marker in markers:
+    if marker in text:
+        text = text.replace(marker, marker + "  void goToEinqClock();\n", 1)
+        break
+else:
+    raise SystemExit("ActivityManager.h: could not find goHome() declaration")
+if "goToEinqClock" not in text:
+    raise SystemExit("ActivityManager.h: goToEinqClock not added")
 path.write_text(text)
 print("patched ActivityManager.h")
 PY
@@ -165,20 +176,32 @@ from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 text = path.read_text()
-text = text.replace(
-    '#include "home/HomeActivity.h"\n',
-    '#include "home/HomeActivity.h"\n#include "einq/EinqClockActivity.h"\n',
-)
-text = text.replace(
-    "void ActivityManager::goHome() { replaceActivity(std::make_unique<HomeActivity>(renderer, mappedInput)); }\n",
-    "void ActivityManager::goHome() { replaceActivity(std::make_unique<HomeActivity>(renderer, mappedInput)); }\n\n"
+if '#include "einq/EinqClockActivity.h"' not in text:
+    text = text.replace(
+        '#include "home/HomeActivity.h"\n',
+        '#include "home/HomeActivity.h"\n#include "einq/EinqClockActivity.h"\n',
+        1,
+    )
+insert = (
     "void ActivityManager::goToEinqClock() {\n"
     "  replaceActivity(std::make_unique<EinqClockActivity>(renderer, mappedInput));\n"
-    "}\n",
+    "}\n\n"
 )
+anchor = "void ActivityManager::pushActivity("
+if anchor not in text:
+    raise SystemExit("ActivityManager.cpp: could not find pushActivity anchor")
+if insert.strip() not in text:
+    text = text.replace(anchor, insert + anchor, 1)
+if "goToEinqClock" not in text:
+    raise SystemExit("ActivityManager.cpp: goToEinqClock not added")
 path.write_text(text)
 print("patched ActivityManager")
 PY
+fi
+
+if ! grep -q 'goToEinqClock' "$AM_H" || ! grep -q 'goToEinqClock' "$AM_CPP"; then
+  echo "error: ActivityManager goToEinqClock patch failed" >&2
+  exit 1
 fi
 
 # OTA: GitHub releases on CastaliaInstitute/einq (asset must be named firmware.bin).
