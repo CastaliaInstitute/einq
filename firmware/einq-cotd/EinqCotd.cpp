@@ -1,7 +1,6 @@
 #include "EinqCotd.h"
 
 #include <ArduinoJson.h>
-#include <FsHelpers.h>
 #include <HTTPClient.h>
 #include <HalStorage.h>
 #include <NetworkClientSecure.h>
@@ -63,20 +62,11 @@ bool ensureCacheDir() {
 }
 
 bool readFileToString(const std::string& path, std::string& out) {
-  FsFile file;
-  if (!Storage.openFileForRead("COTD", path, file)) {
+  const String content = Storage.readFile(path.c_str());
+  if (content.isEmpty()) {
     return false;
   }
-  out.clear();
-  out.reserve(file.size());
-  while (file.available()) {
-    const int ch = file.read();
-    if (ch < 0) {
-      break;
-    }
-    out.push_back(static_cast<char>(ch));
-  }
-  file.close();
+  out = content.c_str();
   return !out.empty();
 }
 
@@ -84,13 +74,7 @@ bool writeStringToFile(const std::string& path, const std::string& body) {
   if (!ensureCacheDir()) {
     return false;
   }
-  FsFile file;
-  if (!Storage.openFileForWrite("COTD", path, file)) {
-    return false;
-  }
-  const size_t written = file.write(reinterpret_cast<const uint8_t*>(body.data()), body.size());
-  file.close();
-  return written == body.size();
+  return Storage.writeFile(path.c_str(), String(body.c_str()));
 }
 
 }  // namespace
