@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f1e8">
+  <title>Mynah X3/X4 Setup</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/app.css?v=3">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">M</span>
+      <span><strong>Mynah eInq</strong><small id="device-status">Connecting</small></span>
+    </div>
+    <button class="icon-button" id="refresh-button" type="button" title="Reload device settings" aria-label="Reload device settings">
+      <span aria-hidden="true">↻</span>
+    </button>
+  </header>
+
+  <main>
+    <nav class="steps" aria-label="Setup sections">
+      <button class="step active" type="button" data-panel="device"><span>1</span>Device</button>
+      <button class="step" type="button" data-panel="profile"><span>2</span>Profile</button>
+      <button class="step" type="button" data-panel="services"><span>3</span>Services</button>
+      <button class="step" type="button" data-panel="rooms"><span>4</span>Rooms</button>
+    </nav>
+
+    <form id="config-form">
+      <section class="panel active" id="panel-device" data-panel="device">
+        <div class="section-heading">
+          <p class="eyebrow">Hardware</p>
+          <h1>Make this device at home</h1>
+          <p>Name it for the person or place it belongs to. Mynah eInq runs on CrossPoint across both models.</p>
+        </div>
+        <div class="field-grid">
+          <label class="field">
+            <span>Device name</span>
+            <input id="device-name" name="deviceName" maxlength="32" autocomplete="off" required>
+          </label>
+          <fieldset class="field">
+            <legend>Hardware</legend>
+            <div class="segmented">
+              <label><input type="radio" name="board" value="x3"><span>Mynah X3</span></label>
+              <label><input type="radio" name="board" value="x4"><span>Mynah X4</span></label>
+            </div>
+          </fieldset>
+        </div>
+        <div class="network-band">
+          <span><strong>WiFi network</strong><small id="network-name">Not configured</small></span>
+          <button class="secondary" id="change-wifi" type="button">Change</button>
+        </div>
+        <div class="wifi-fields" id="wifi-fields" hidden>
+          <label class="field">
+            <span>Primary network</span>
+            <input id="wifi-primary-ssid" autocomplete="ssid" maxlength="32">
+          </label>
+          <label class="field">
+            <span>Primary password</span>
+            <input id="wifi-primary-password" type="password" autocomplete="current-password" maxlength="64">
+          </label>
+          <label class="field">
+            <span>Backup network</span>
+            <input id="wifi-backup-ssid" maxlength="32">
+          </label>
+          <label class="field">
+            <span>Backup password</span>
+            <input id="wifi-backup-password" type="password" autocomplete="current-password" maxlength="64">
+          </label>
+          <button class="secondary" id="save-wifi" type="button">Save WiFi</button>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-profile" data-panel="profile">
+        <div class="section-heading">
+          <p class="eyebrow">Household policy</p>
+          <h1>Choose who this is for</h1>
+          <p>The profile controls what appears and which household actions are available.</p>
+        </div>
+        <fieldset class="choice-list">
+          <legend class="sr-only">Profile</legend>
+          <label class="choice">
+            <input type="radio" name="profile" value="parent">
+            <span><strong>Parent</strong><small>Personal calendar, household controls, and full Castalia catalog</small></span>
+          </label>
+          <label class="choice">
+            <input type="radio" name="profile" value="kid">
+            <span><strong>Kid</strong><small>Family calendar, approved scenes, and age-aware content</small></span>
+          </label>
+        </fieldset>
+        <label class="field age-field" id="age-field">
+          <span>Content age band</span>
+          <select id="age-band" name="ageBand">
+            <option value="child">Child</option>
+            <option value="tween">Tween</option>
+            <option value="teen">Teen</option>
+          </select>
+        </label>
+        <div class="toggle-list">
+          <label class="toggle"><span><strong>Calendar</strong><small>Show today and the next event</small></span><input type="checkbox" name="calendarEnabled"></label>
+          <label class="toggle"><span><strong>Astrology</strong><small>Daily Astrolabe reading</small></span><input type="checkbox" name="astrologyEnabled"></label>
+          <label class="toggle"><span><strong>Fortunes</strong><small>Daily draw and reflection</small></span><input type="checkbox" name="fortuneEnabled"></label>
+          <label class="toggle"><span><strong>eINQ cards</strong><small>Scheduled Castalia inquiry cards</small></span><input type="checkbox" name="cardsEnabled"></label>
+        </div>
+        <label class="field">
+          <span>Household calendar ID</span>
+          <input id="calendar-id" name="calendarId" maxlength="192" autocomplete="off"
+                 placeholder="Calendar address configured by a parent">
+        </label>
+      </section>
+
+      <section class="panel" id="panel-services" data-panel="services">
+        <div class="section-heading">
+          <p class="eyebrow">Connections</p>
+          <h1>Bring in useful things</h1>
+          <p>Accounts connect through Castalia. Vendor credentials are never stored on the e-paper device.</p>
+        </div>
+        <div class="service-list">
+          <article class="service">
+            <span class="service-mark castalia" aria-hidden="true">C</span>
+            <span><strong>Castalia household</strong><small id="castalia-state">Not paired</small></span>
+            <button class="secondary" type="button" data-connect="castalia">Pair</button>
+          </article>
+          <article class="service">
+            <span class="service-mark calendar" aria-hidden="true">31</span>
+            <span><strong>Calendar</strong><small>Connected by a parent</small></span>
+            <button class="secondary" type="button" data-connect="calendar">Connect</button>
+          </article>
+          <article class="service">
+            <span class="service-mark spotify" aria-hidden="true">S</span>
+            <span><strong>Spotify</strong><small>Remote control for a Connect player</small></span>
+            <button class="secondary" type="button" data-connect="spotify">Connect</button>
+          </article>
+          <article class="service">
+            <span class="service-mark lights" aria-hidden="true">L</span>
+            <span><strong>Home Assistant</strong><small>Local bridge for allow-listed Tuya lights</small></span>
+            <button class="secondary" type="button" data-connect="home-assistant">Connect</button>
+          </article>
+        </div>
+        <label class="field">
+          <span>Castalia gateway</span>
+          <input id="gateway-url" name="gatewayUrl" type="url" inputmode="url" placeholder="https://mynah.castalia.institute">
+        </label>
+      </section>
+
+      <section class="panel" id="panel-rooms" data-panel="rooms">
+        <div class="section-heading">
+          <p class="eyebrow">Room awareness</p>
+          <h1>Teach eInq where it is</h1>
+          <p>Assign one BLE beacon to each room. Signal smoothing keeps controls from jumping between nearby rooms.</p>
+        </div>
+        <div id="room-list" class="room-list"></div>
+        <button class="secondary add-room" id="add-room" type="button"><span aria-hidden="true">+</span>Add room</button>
+        <div class="confidence">
+          <label for="room-confidence"><span><strong>Switch confidence</strong><small>Higher values reduce accidental room changes</small></span></label>
+          <output id="room-confidence-value">5 dB</output>
+          <input id="room-confidence" name="roomMinimumLead" type="range" min="2" max="15" step="1">
+        </div>
+      </section>
+
+      <footer class="actions">
+        <p id="save-state" role="status">Settings load from your eInq.</p>
+        <button class="primary" id="save-config" type="submit">Save settings</button>
+      </footer>
+    </form>
+  </main>
+
+  <template id="room-template">
+    <article class="room-row">
+      <label class="field"><span>Room name</span><input data-room-name maxlength="31" placeholder="Kitchen"></label>
+      <label class="field"><span>Beacon ID</span><input data-beacon-id maxlength="63" placeholder="Address, name, or iBeacon ID"></label>
+      <button class="icon-button remove-room" type="button" title="Remove room" aria-label="Remove room"><span aria-hidden="true">×</span></button>
+    </article>
+  </template>
+  <script src="/app.js?v=3" defer></script>
+</body>
+</html>

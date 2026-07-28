@@ -16,13 +16,22 @@ if [[ ! -d "$CP/src" ]]; then
   exit 1
 fi
 
-mkdir -p "$CP/src/activities/einq" "$CP/src/einq-ble" "$CP/src/einq-schedule" "$CP/src/einq-glyph" "$CP/src/einq-cotd" "$CP/src/einq-ota"
-cp "$PATCH/EinqClockActivity.h" "$PATCH/EinqClockActivity.cpp" "$CP/src/activities/einq/"
+python3 "$ROOT/scripts/generate-setup-assets.py"
+
+mkdir -p "$CP/src/activities/einq" "$CP/src/einq-ble" "$CP/src/einq-schedule" "$CP/src/einq-glyph" "$CP/src/einq-cotd" "$CP/src/einq-ota" "$CP/src/einq-wifi" "$CP/src/einq-config" "$CP/src/einq-room" "$CP/src/einq-home" "$CP/src/einq-auth"
+cp "$PATCH/EinqClockActivity.h" "$PATCH/EinqClockActivity.cpp" "$PATCH/EinqWifiSetupActivity.h" "$PATCH/EinqWifiSetupActivity.cpp" "$PATCH/EinqAuthActivity.h" "$PATCH/EinqAuthActivity.cpp" "$CP/src/activities/einq/"
 cp "$ROOT/firmware/einq-ble/"*.h "$ROOT/firmware/einq-ble/"*.cpp "$CP/src/einq-ble/"
 cp "$ROOT/firmware/einq-schedule/"*.h "$ROOT/firmware/einq-schedule/"*.cpp "$CP/src/einq-schedule/"
 cp "$ROOT/firmware/einq-glyph/"*.h "$ROOT/firmware/einq-glyph/"*.cpp "$CP/src/einq-glyph/"
 cp "$ROOT/firmware/einq-cotd/"*.h "$ROOT/firmware/einq-cotd/"*.cpp "$CP/src/einq-cotd/"
 cp "$ROOT/firmware/einq-ota/"*.h "$ROOT/firmware/einq-ota/"*.cpp "$CP/src/einq-ota/"
+cp "$ROOT/firmware/einq-wifi/"*.h "$ROOT/firmware/einq-wifi/"*.cpp "$CP/src/einq-wifi/"
+cp "$ROOT/firmware/einq-config/"*.h "$ROOT/firmware/einq-config/"*.cpp "$CP/src/einq-config/"
+rm -f "$CP/src/einq-room/test_room_resolver.cpp"
+cp "$ROOT/firmware/einq-room/EinqRoomResolver.h" "$ROOT/firmware/einq-room/EinqRoomResolver.cpp" \
+  "$ROOT/firmware/einq-room/EinqRoomScanner.h" "$ROOT/firmware/einq-room/EinqRoomScanner.cpp" "$CP/src/einq-room/"
+cp "$ROOT/firmware/einq-home/"*.h "$ROOT/firmware/einq-home/"*.cpp "$CP/src/einq-home/"
+cp "$ROOT/firmware/einq-auth/"*.h "$ROOT/firmware/einq-auth/"*.cpp "$CP/src/einq-auth/"
 
 PIO_INI="$CP/platformio.ini"
 if ! grep -q 'NimBLE-Arduino' "$PIO_INI"; then
@@ -37,6 +46,20 @@ if needle not in text:
     raise SystemExit("platformio.ini: could not find lib_deps anchor")
 path.write_text(text.replace(needle, insert, 1))
 print("patched platformio.ini (NimBLE-Arduino)")
+PY
+fi
+
+if ! grep -q -- '-DEINQ_KEEP_AWAKE=1' "$PIO_INI"; then
+  python3 - "$PIO_INI" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+needle = "  -DARDUINO_USB_CDC_ON_BOOT=1\n"
+if needle not in text:
+    raise SystemExit("platformio.ini: could not find USB CDC build flag")
+path.write_text(text.replace(needle, needle + "  -DEINQ_KEEP_AWAKE=1\n", 1))
+print("patched platformio.ini (development keep-awake)")
 PY
 fi
 
@@ -146,6 +169,36 @@ print("patched main.cpp (boot → Einq)")
 PY
 fi
 
+if ! grep -q 'Development keep-awake overrides USB power sleep' "$MAIN_CPP"; then
+  python3 - "$MAIN_CPP" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+old = """    case HalGPIO::WakeupReason::AfterUSBPower:
+      // If USB power caused a cold boot, go back to sleep
+      LOG_DBG("MAIN", "Wakeup reason: After USB Power");
+      powerManager.startDeepSleep(gpio);
+      break;
+"""
+new = """    case HalGPIO::WakeupReason::AfterUSBPower:
+      // Development keep-awake overrides USB power sleep so the console and radios stay reachable.
+#if EINQ_KEEP_AWAKE
+      LOG_INF("MAIN", "Wakeup reason: After USB Power; development keep-awake");
+      break;
+#else
+      LOG_DBG("MAIN", "Wakeup reason: After USB Power");
+      powerManager.startDeepSleep(gpio);
+      break;
+#endif
+"""
+if old not in text:
+    raise SystemExit("main.cpp: could not find AfterUSBPower branch")
+path.write_text(text.replace(old, new, 1))
+print("patched main.cpp (USB development keep-awake)")
+PY
+fi
+
 AM_CPP="$CP/src/activities/ActivityManager.cpp"
 AM_H="$CP/src/activities/ActivityManager.h"
 if ! grep -q 'goToEinqClock' "$AM_H"; then
@@ -241,6 +294,75 @@ if n != 1:
 path.write_text(text)
 print(f"set CrossPoint/Einq firmware version to {version}")
 PY
+fi
+
+# Home menu: Einq WiFi setup (after Einq Clock entry).
+if grep -q 'Einq Clock' "$HOME_CPP" && ! grep -q 'Einq WiFi' "$HOME_CPP"; then
+  python3 - "$HOME_CPP" "$HOME_H" <<'PY'
+from pathlib import Path
+import sys
+home_cpp = Path(sys.argv[1])
+home_h = Path(sys.argv[2])
+text = home_cpp.read_text()
+text = text.replace(
+    '#include "activities/einq/EinqClockActivity.h"\n',
+    '#include "activities/einq/EinqClockActivity.h"\n#include "activities/einq/EinqWifiSetupActivity.h"\n',
+    1,
+)
+text = text.replace(
+    '  int count = 5;  // File Browser, Recents, File transfer, Settings, Einq Clock\n',
+    '  int count = 6;  // File Browser, Recents, File transfer, Settings, Einq Clock, Einq WiFi\n',
+    1,
+)
+text = text.replace(
+    '                                        "Einq Clock", tr(STR_SETTINGS_TITLE)};\n'
+    '  std::vector<UIIcon> menuIcons = {Folder, Recent, Transfer, Transfer, Settings};\n',
+    '                                        "Einq Clock", "Einq WiFi", tr(STR_SETTINGS_TITLE)};\n'
+    '  std::vector<UIIcon> menuIcons = {Folder, Recent, Transfer, Transfer, Transfer, Settings};\n',
+    1,
+)
+text = text.replace(
+    """    const int einqClockIdx = idx++;
+    const int settingsIdx = idx;
+""",
+    """    const int einqClockIdx = idx++;
+    const int einqWifiIdx = idx++;
+    const int settingsIdx = idx;
+""",
+    1,
+)
+text = text.replace(
+    """    } else if (menuSelectedIndex == einqClockIdx) {
+      onEinqClockOpen();
+    } else if (menuSelectedIndex == settingsIdx) {
+""",
+    """    } else if (menuSelectedIndex == einqClockIdx) {
+      onEinqClockOpen();
+    } else if (menuSelectedIndex == einqWifiIdx) {
+      onEinqWifiOpen();
+    } else if (menuSelectedIndex == settingsIdx) {
+""",
+    1,
+)
+home_cpp.write_text(text)
+print("patched HomeActivity.cpp (Einq WiFi)")
+
+h = home_h.read_text()
+if "onEinqWifiOpen" not in h:
+    h = h.replace("  void onEinqClockOpen();\n", "  void onEinqClockOpen();\n  void onEinqWifiOpen();\n", 1)
+    home_h.write_text(h)
+    print("patched HomeActivity.h (Einq WiFi)")
+PY
+fi
+
+if grep -q 'onEinqWifiOpen' "$HOME_H" && ! grep -q 'void HomeActivity::onEinqWifiOpen' "$HOME_CPP"; then
+  cat >>"$HOME_CPP" <<'EOF'
+
+void HomeActivity::onEinqWifiOpen() {
+  startActivityForResult(std::make_unique<EinqWifiSetupActivity>(renderer, mappedInput), nullptr);
+}
+EOF
+  echo "added HomeActivity::onEinqWifiOpen"
 fi
 
 echo "Einq patch applied (clock + BLE GATT; auto-start on boot; Back → CrossPoint home)"

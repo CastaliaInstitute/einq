@@ -1,0 +1,10 @@
+{
+  "name": "Mynah X3/X4 Setup",
+  "short_name": "Mynah Setup",
+  "description": "Configure a Castalia Mynah eInq device.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f1e8",
+  "theme_color": "#f4f1e8",
+  "icons": []
+}

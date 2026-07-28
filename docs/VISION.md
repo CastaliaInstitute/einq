@@ -1,6 +1,10 @@
-# Einq vision (draft)
+# Mynah eInq vision (draft)
 
-The X4 is a **room surface** — not an e-reader in our product. We are not building a reading experience (no EPUB library, no book UI). Through the day it shows calm, rotating **faces** chosen for the time of day and refreshed on a schedule.
+Mynah X3 and Mynah X4 are Castalia room surfaces based on Xteink hardware.
+They install CrossPoint, including its reader and system capabilities, while
+booting into eInq as the default household experience. Through the day eInq
+shows calm, rotating **faces** chosen for the time of day and refreshed on a
+schedule.
 
 ## Primary experience
 
@@ -37,8 +41,14 @@ Refresh policy: partial updates when only text changes; full refresh at day boun
 
 ## Firmware
 
-**Einq firmware** — dedicated image for the X4: boots straight into the inq surface, WiFi for content sync and OTA, deep sleep between refreshes.
+**Mynah firmware** — CrossPoint plus the eInq application and shared Castalia
+modules: boots straight into the eInq surface, keeps the CrossPoint home and
+reader available, uses WiFi for content sync and OTA, and sleeps between
+refreshes.
 
-We used [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) early on as a known-good way to validate the board (display, USB flash, community SDK). That is **bring-up only**, not the product. New work targets **inq-face** on the open [X4 SDK](https://github.com/crosspoint-reader/community-sdk) stack without shipping reader features.
+We use [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)
+as the installed base system for both Mynah models. New work targets
+**inq-face** as a first-class CrossPoint application and should preserve
+reader, system, and recovery paths.
 
 Implementation details (APIs, card JSON, offline cache, faculty RAG) come later. The clock spike proved display + schedule; **inq-face** is the product.

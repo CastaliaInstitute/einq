@@ -1,0 +1,28 @@
+{
+  "profile": "parent",
+  "ageBand": "adult",
+  "defaultCalendarId": "ca7a560e76044c59bbb72a70b98a21a774b99c2f5195eb7357ecd1a1cdf74344@group.calendar.google.com",
+  "calendars": {
+    "ca7a560e76044c59bbb72a70b98a21a774b99c2f5195eb7357ecd1a1cdf74344@group.calendar.google.com": "calendar.replace_with_home_assistant_entity"
+  },
+  "weatherEntity": "weather.replace_with_home_assistant_entity",
+  "calendarTitleMode": "full",
+  "permissions": {
+    "calendar": true,
+    "astrology": true,
+    "fortune": true,
+    "cards": true,
+    "spotifyControl": true,
+    "lightControl": true,
+    "administration": true
+  },
+  "rooms": {
+    "Kitchen": {
+      "spotifyEntity": "media_player.replace_with_kitchen_player",
+      "lightEntities": [
+        "light.replace_with_kitchen_light"
+      ],
+      "scene": "Evening"
+    }
+  }
+}

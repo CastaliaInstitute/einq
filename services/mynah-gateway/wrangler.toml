@@ -1,0 +1,11 @@
+name = "mynah-gateway"
+main = "src/worker.js"
+compatibility_date = "2026-07-28"
+keep_vars = true
+
+routes = [
+  { pattern = "mynah.castalia.institute/*", zone_name = "castalia.institute" }
+]
+
+# HOME_ASSISTANT_URL and CASTALIA_CONTENT_URL are configured as Worker vars.
+# Tokens, Supabase keys, and device/user policy are configured as secrets.

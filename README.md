@@ -1,6 +1,8 @@
 # Einq
 
-**Einq** is Castalia Institute’s e-paper platform — calm, low-power surfaces for information that should live in the room, not on a phone.
+**Mynah eInq** is Castalia Institute’s e-paper experience for **Mynah X3**
+and **Mynah X4** — calm, low-power surfaces for information that should live
+in the room, not on a phone.
 
 **Site:** [https://einq.castalia.institute/](https://einq.castalia.institute/)
 
@@ -8,16 +10,29 @@
 
 | Device | Status | Notes |
 |--------|--------|--------|
-| [Xteink X4](https://www.xteink.com/) | **Supported** | 4.3″ e-paper display (ESP32-C3); primary hardware |
+| Mynah X3 | **Target** | Based on the Xteink X3; licensing in progress |
+| Mynah X4 | **Supported** | Based on the [Xteink X4](https://www.xteink.com/); licensing in progress |
 
-**Einq is not an e-reader.** We use the X4 as an ambient inquiry surface (inq cards, quotes, reminders). Firmware is **Einq-only** — built on the open X4 hardware/SDK ecosystem, not a fork of reader UX.
+Mynah X3 and X4 install
+[CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader) as their
+base system. eInq is the default Castalia household experience; CrossPoint
+continues to provide board support, settings, recovery, and its reader
+capabilities.
 
 ## Goals
 
 - **Day-long inq surface** — through the day the screen shows **inq cards** (person, place, thing), plus quotes, mindfulness reminders, and light time context — rotated by schedule, not by notifications. See [docs/VISION.md](docs/VISION.md) (details TBD).
 - **Time-aware refresh** — what appears changes with part of day; e-paper updates on a timer, WiFi only when syncing content.
 - **Castalia apps** — first-party logic under `apps/` and `firmware/` (clock demo today; **inq-face** next).
-- **Developer-friendly** — CrossPoint as OS; Einq app owns the ambient face.
+- **Developer-friendly** — CrossPoint as the installed base system; eInq owns
+  the default ambient face.
+- **Room-aware controls** — BLE RSSI selects the likely room so lighting and
+  household actions stay relevant to where the device is.
+- **Two household modes** — parent and kid profiles share the same firmware,
+  with capabilities enforced by policy rather than by separate builds.
+
+The current product architecture and staged feature plan are in
+[docs/PRODUCT.md](docs/PRODUCT.md).
 
 ## Repository layout
 
@@ -51,16 +66,18 @@ set -a && source ../castalia.institute/.env && set +a
 
 Or run the **Sync einq DNS** workflow (requires repo/org `CLOUDFLARE_API_TOKEN`).
 
-## Flash / bring-up (X4)
+## Install / bring-up (Mynah X4)
 
-Early validation used [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader) only to prove USB flash and the panel (`EINQ_PATCH=0 ./scripts/flash-x4.sh`). **Product firmware** will be **inq-face** — see `apps/inq-face/`.
+The build installs CrossPoint with the Mynah eInq modules and default face.
+Unmodified community CrossPoint remains useful for board validation.
 
 ```bash
-# Optional: flash community CrossPoint image (bring-up / lab only)
+# Optional: flash unmodified community CrossPoint for board validation
 EINQ_PATCH=0 ./scripts/flash-x4.sh
 ```
 
-Restore stock or community images via [CrossPoint flash tools](https://crosspointreader.com/#flash-tools) if needed.
+Restore or install images via
+[CrossPoint flash tools](https://crosspointreader.com/#flash-tools) if needed.
 
 ## Develop an Einq app
 

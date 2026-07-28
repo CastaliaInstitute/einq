@@ -21,7 +21,7 @@ async def run(show: str | None, wait_notify: float) -> int:
         return 1
 
     device = None
-    async for d in BleakScanner.discover(timeout=8.0):
+    for d in await BleakScanner.discover(timeout=8.0):
         if d.name and "Einq" in d.name:
             device = d
             break

@@ -1,10 +1,10 @@
-# Einq Clock (demo app)
+# Mynah eInq CrossPoint app
 
-Time-aware face for Xteink X4. Two ways to run it:
+Daily household experience for Xteink X3 and X4.
 
 ## A. Built into CrossPoint (recommended)
 
-Patches CrossPoint with **Home → Einq Clock** (live clock, refreshes each minute).
+Patches CrossPoint with the Mynah face carousel and starts it on boot.
 
 ```bash
 ./scripts/flash-x4.sh              # EINQ_PATCH=1 (default): build + flash
@@ -25,32 +25,26 @@ python3 scripts/ble-einq-probe.py
 python3 scripts/ble-einq-probe.py --show '{"mode":"message","title":"Einq","line1":"Hello"}'
 ```
 
-## WiFi (demo)
+## WiFi
 
-CrossPoint stores WiFi on the **SD card** at `/.crosspoint/wifi.json` (not ESP NVS). For the Chateau demo:
+Einq stores WiFi in **ESP32 NVS** (not SD). On-device setup:
 
-```bash
-chmod +x scripts/setup-wifi-sd.py
-./scripts/setup-wifi-sd.py --from-device
-# When the SD volume is mounted:
-./scripts/setup-wifi-sd.py --from-device --mount /Volumes/YOUR_SD
-```
+1. Long-press the forward side button to open setup.
+2. Join the device-specific `x3-XXXX` hotspot when neither saved network connects.
+3. Open `http://x3.local/` or `http://192.168.4.1/`.
+4. Save primary and backup WiFi networks in NVS.
 
-Default SSID/password: **The Chateau** / **thechateau**. Staging file: `apps/clock-face/sd/.crosspoint/wifi.json`.
+See [apps/inq-face/WIFI.md](../inq-face/WIFI.md).
 
-With the Einq clock patch, the face loads that file on boot, connects, and runs NTP so the clock can show real time.
+Legacy SD WiFi (`scripts/setup-wifi-sd.py`) is only for upstream CrossPoint file transfer, not the Einq clock patch.
 
-### Scheduled wake (glyph + clock)
+### Daily faces
 
-The Einq face **light-sleeps** between updates (CrossPoint deep sleep is disabled while the face is active). It wakes on:
+The app light-sleeps between updates and wakes for clock, content, and room changes.
+Short presses on either side button move through:
 
-- **Each minute** — refresh the clock
-- **Midnight** — rotate the daily **iNQ glyph** (person / place / thing by day-of-year)
-- **Power button** — same as any wake from light sleep
-
-Requires NTP-synced wall time (WiFi once at boot). Long-press power still enters CrossPoint deep sleep (manual).
-
-**Card of the Day:** when WiFi is available, the face syncs from `https://cards.castalia.institute/card-of-the-day/YYYY-MM-DD.json` (7-year arc + Candlemas seasons — same schedule as iNQ Cards). Cached on SD at `/.einq/cotd/`. See [apps/inq-face/COTD.md](../inq-face/COTD.md).
+Today, Calendar, Self Weather, Synastry, Family, Fortune, eINQ Card,
+Spotify, and room Lights. Unavailable or disallowed faces are skipped.
 
 **Midnight OTA:** checks `https://einq.castalia.institute/firmware.json` once per day at the day boundary; installs newer firmware automatically from GitHub Pages. Manual updates still use Settings → System → Check for updates (GitHub Releases). See [docs/OTA.md](../../docs/OTA.md).
 

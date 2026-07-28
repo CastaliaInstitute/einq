@@ -1,0 +1,11 @@
+{
+  "name": "@castalia/mynah-gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/worker.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

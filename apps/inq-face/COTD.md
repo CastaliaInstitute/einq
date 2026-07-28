@@ -54,6 +54,6 @@ The JSON routes are generated at build time in **cards** (`src/pages/card-of-the
 
 ## Related
 
-- [AUTH.md](AUTH.md) — QR sign-in for per-user / household cards (planned)
+- [AUTH.md](AUTH.md) — QR sign-in for per-user and household cards
 - [CARD-ART.md](CARD-ART.md) — future Noto Emoji / bitmap art
 - [cards/editorial/arc/README.md](https://github.com/CastaliaInstitute/cards/blob/main/editorial/arc/README.md) — arc, manifests, Candlemas seasons

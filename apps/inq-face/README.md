@@ -1,19 +1,19 @@
-# inq-face (planned)
+# Mynah eInq faces
 
-Default **Einq** experience: one e-paper screen through the day.
+The default Mynah X3/X4 experience is a room-aware sequence of e-paper faces:
 
-## Intended content (TBD)
+1. Today: clock, physical weather, and the day's astrological aphorism
+2. Calendar
+3. Self Weather
+4. Synastry
+5. Family status
+6. Fortune
+7. eINQ Card
+8. Spotify
+9. Room lights
 
-- **Inq card** — person, place, or thing; one card visible at a time
-- **Card image (v0)** — one **monochrome Noto Emoji** glyph per card (no photos yet); bitmap or font glyph blitted to the framebuffer
-- **Quote** — optional; may tie to [quotes.castalia.institute](https://quotes.castalia.institute)
-- **Mindfulness reminder** — short line, schedule-aware
-- **Time band** — morning / day / evening layouts
-
-## Not decided yet
-
-- Card format (JSON on SD vs API sync)
-- Rotation rules and Castalia backend
-- OTA and WiFi sync cadence
+Content and permissions arrive from the Mynah gateway and are cached on SD.
+The local parent/kid profile can further restrict categories. RSSI room detection
+selects the allow-listed Spotify player and Home Assistant light entities.
 
 See [docs/VISION.md](../../docs/VISION.md).

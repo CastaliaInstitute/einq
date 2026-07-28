@@ -1,6 +1,7 @@
 # Einq apps
 
-Each subdirectory is one **Einq application** — firmware or assets for the ambient e-paper face on X4.
+Each subdirectory is one **Mynah eInq application** — firmware or assets for
+the default Castalia experience on Mynah X3 and Mynah X4.
 
 **Product direction:** [docs/VISION.md](../docs/VISION.md) — inq cards, quotes, mindfulness reminders, scheduled through the day. Schema and APIs later.
 
@@ -13,7 +14,8 @@ Each subdirectory is one **Einq application** — firmware or assets for the amb
 
 ## Conventions
 
-- **PlatformIO** / ESP32-C3; extend CrossPoint or ship a dedicated face firmware
+- **PlatformIO** / ESP32-C3; install CrossPoint and extend it with first-class
+  Mynah activities
 - Document refresh policy (partial vs full) per app
 - Content packs: prefer SD or synced JSON later; no secrets in repo
 

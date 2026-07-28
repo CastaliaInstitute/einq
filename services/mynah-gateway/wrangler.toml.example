@@ -1,0 +1,10 @@
+name = "mynah-gateway"
+main = "src/worker.js"
+compatibility_date = "2026-07-28"
+
+[vars]
+HOME_ASSISTANT_URL = "https://home-assistant.example"
+CASTALIA_CONTENT_URL = "https://castalia.example/api/v1/device/home-content"
+
+# Store HOME_ASSISTANT_TOKEN, CASTALIA_SERVICE_TOKEN, and DEVICE_SESSIONS with
+# `wrangler secret put`. Never commit their values.
