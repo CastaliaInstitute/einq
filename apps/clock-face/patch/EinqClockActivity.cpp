@@ -397,6 +397,13 @@ void EinqClockActivity::drawClockFace(const struct tm& localTime) {
 }
 
 bool EinqClockActivity::faceAvailable(Face candidate) const {
+  // Before the first daily payload arrives, keep every face reachable so the
+  // navigation controls provide visible feedback instead of wrapping Day back
+  // onto itself. Once synced, household permissions and content availability
+  // determine which faces participate in the carousel.
+  if (!home.valid) {
+    return true;
+  }
   switch (candidate) {
     case Face::Day:
       return true;
@@ -524,13 +531,19 @@ void EinqClockActivity::drawHomeFace() {
       break;
   }
 
+  const bool awaitingDailySync = !home.valid;
+  if (awaitingDailySync) {
+    title = faceLabel(face);
+    summary = "Available after the daily mindfulness sync";
+  }
+
   renderer.clearScreen();
   EinqCornerArt::drawFourCorners(renderer, pageWidth, pageHeight);
   GUI.drawHeader(renderer, cornerSafeHeaderRect(metrics, pageWidth), faceLabel(face),
                  strcmp(home.profile, "kid") == 0 ? "Kid" : nullptr);
 
   int y = contentTop;
-  if (face == Face::Family) {
+  if (face == Face::Family && !awaitingDailySync) {
     for (size_t i = 0; i < home.familyCount && i < 6; i++) {
       if (!home.family[i].valid) continue;
       renderer.drawCenteredText(bodyFont, y, home.family[i].name, true);
@@ -773,7 +786,7 @@ void EinqClockActivity::loop() {
             analogRead(InputManager::BUTTON_ADC_PIN_2), digitalRead(InputManager::POWER_BUTTON_PIN));
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::PageBack)) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::NavPrevious)) {
     if (mappedInput.getHeldTime() >= SIDE_BUTTON_LONG_PRESS_MS) {
       if (face == Face::Spotify && home.permissions.spotifyControl) {
         performFaceAction("spotify.previous");
@@ -788,7 +801,7 @@ void EinqClockActivity::loop() {
     return;
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::PageForward)) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::NavNext)) {
     if (mappedInput.getHeldTime() >= SIDE_BUTTON_LONG_PRESS_MS) {
       if (face == Face::Spotify && home.permissions.spotifyControl) {
         performFaceAction("spotify.next");
@@ -808,14 +821,6 @@ void EinqClockActivity::loop() {
     return;
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::Left)) {
-    moveFace(-1);
-    return;
-  }
-  if (mappedInput.wasReleased(MappedInputManager::Button::Right)) {
-    moveFace(1);
-    return;
-  }
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (face == Face::Day && !authSessionAvailable) {
       openCastaliaPairing();
