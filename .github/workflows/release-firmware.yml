@@ -77,12 +77,15 @@ jobs:
           TAG="${{ steps.ver.outputs.version }}"
           FW=".vendor/crosspoint-reader/.pio/build/gh_release/firmware.bin"
           test -f "$FW"
-          # Remove prior release/tag so re-runs and orphan tags do not block create.
-          gh release delete "$TAG" --yes 2>/dev/null || true
-          git push origin ":refs/tags/${TAG}" 2>/dev/null || true
-          gh release create "$TAG" "$FW" \
-            --title "Einq firmware ${TAG}" \
-            --notes "Xteink X4 (ESP32-C3) Einq build. OTA: Settings - System - Check for updates, or midnight auto-update from einq.castalia.institute. Built from commit ${{ github.sha }}."
+          NOTES="Xteink X4 (ESP32-C3) Einq build. OTA: Settings - System - Check for updates, or midnight auto-update from einq.castalia.institute. Built from commit ${{ github.sha }}."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "Einq firmware ${TAG}" --notes "$NOTES"
+            gh release upload "$TAG" "$FW" --clobber
+          else
+            gh release create "$TAG" "$FW" --verify-tag \
+              --title "Einq firmware ${TAG}" \
+              --notes "$NOTES"
+          fi
 
       - name: Deploy GitHub Pages (site + firmware OTA)
         env:
