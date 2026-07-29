@@ -13,6 +13,7 @@
 #include <string>
 
 #include "components/UITheme.h"
+#include "EinqCornerArt.h"
 #include "einq-ble/EinqBle.h"
 #include "einq-auth/EinqAuth.h"
 #include "einq-cotd/EinqCotd.h"
@@ -44,6 +45,36 @@ std::string wifiPassword;
 std::string wifiBackupSsid;
 std::string wifiBackupPassword;
 
+Rect cornerSafeHeaderRect(const ThemeMetrics& metrics, const int pageWidth) {
+  int left = 0;
+  int right = 0;
+  EinqCornerArt::contentInsets(true, left, right);
+  return Rect{left, metrics.topPadding, pageWidth - left - right, metrics.headerHeight};
+}
+
+void drawCornerSafeFooter(GfxRenderer& renderer, const ThemeMetrics& metrics,
+                          const int pageWidth, const int pageHeight,
+                          const char* btn1, const char* btn2, const char* btn3, const char* btn4) {
+  int left = 0;
+  int right = 0;
+  EinqCornerArt::contentInsets(false, left, right);
+  const int width = pageWidth - left - right;
+  const int y = pageHeight - metrics.buttonHintsHeight;
+  const char* labels[] = {btn1, btn2, btn3, btn4};
+  const int segmentWidth = width / 4;
+  for (int i = 0; i < 4; ++i) {
+    if (labels[i] == nullptr || labels[i][0] == '\0') continue;
+    const int x = left + i * segmentWidth;
+    const int itemWidth = i == 3 ? width - segmentWidth * 3 : segmentWidth;
+    renderer.fillRect(x, y, itemWidth, metrics.buttonHintsHeight, false);
+    renderer.drawRect(x, y, itemWidth, metrics.buttonHintsHeight);
+    const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, labels[i]);
+    const int textHeight = renderer.getTextHeight(UI_10_FONT_ID);
+    renderer.drawText(UI_10_FONT_ID, x + (itemWidth - textWidth) / 2,
+                      y + (metrics.buttonHintsHeight - textHeight) / 2, labels[i]);
+  }
+}
+
 void beginWifiAttempt(const std::string& ssid, const std::string& password) {
   wifiSsid = ssid;
   wifiPassword = password;
@@ -63,6 +94,8 @@ void startFallbackAccessPoint() {
 }
 
 void syncTimeWithNTP() {
+  setenv("TZ", "MST7MDT,M3.2.0,M11.1.0", 1);
+  tzset();
   if (esp_sntp_enabled()) {
     esp_sntp_stop();
   }
@@ -71,7 +104,7 @@ void syncTimeWithNTP() {
   esp_sntp_init();
 
   int retry = 0;
-  constexpr int maxRetries = 15;
+  constexpr int maxRetries = 50;
   while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && retry < maxRetries) {
     delay(200);
     retry++;
@@ -270,7 +303,8 @@ void EinqClockActivity::maybeMidnightOta(const struct tm& localTime) {
   const int pageWidth = renderer.getScreenWidth();
   const int pageHeight = renderer.getScreenHeight();
   renderer.clearScreen();
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, "Einq");
+  EinqCornerArt::drawFourCorners(renderer, pageWidth, pageHeight);
+  GUI.drawHeader(renderer, cornerSafeHeaderRect(metrics, pageWidth), "Einq");
   const int bodyFont = NOTOSANS_14_FONT_ID;
   const int bodyH = renderer.getLineHeight(bodyFont);
   int y = (pageHeight - bodyH * 2) / 2;
@@ -292,7 +326,8 @@ void EinqClockActivity::drawClockFace(const struct tm& localTime) {
   formatClock(localTime, timeStr, sizeof(timeStr), dayStr, sizeof(dayStr));
 
   renderer.clearScreen();
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, "Today",
+  EinqCornerArt::drawFourCorners(renderer, pageWidth, pageHeight);
+  GUI.drawHeader(renderer, cornerSafeHeaderRect(metrics, pageWidth), "Today",
                  strcmp(home.profile, "kid") == 0 ? "Kid" : nullptr);
 
   const int timeFont = NOTOSANS_18_FONT_ID;
@@ -337,7 +372,8 @@ void EinqClockActivity::drawClockFace(const struct tm& localTime) {
   }
 
   const auto labels = mappedInput.mapLabels("Home", EinqAuth::hasSession() ? "" : "Pair", "<", ">");
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  drawCornerSafeFooter(renderer, metrics, pageWidth, pageHeight,
+                       labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   GUI.drawSideButtonHints(renderer, "Prev", "Next");
   renderer.displayBuffer();
 }
@@ -470,7 +506,8 @@ void EinqClockActivity::drawHomeFace() {
   }
 
   renderer.clearScreen();
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, faceLabel(face),
+  EinqCornerArt::drawFourCorners(renderer, pageWidth, pageHeight);
+  GUI.drawHeader(renderer, cornerSafeHeaderRect(metrics, pageWidth), faceLabel(face),
                  strcmp(home.profile, "kid") == 0 ? "Kid" : nullptr);
 
   int y = contentTop;
@@ -507,7 +544,8 @@ void EinqClockActivity::drawHomeFace() {
   const bool actionable = (face == Face::Spotify && home.permissions.spotifyControl) ||
                           (face == Face::Lights && home.permissions.lightControl);
   const auto labels = mappedInput.mapLabels("Home", actionable ? "OK" : "", "<", ">");
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  drawCornerSafeFooter(renderer, metrics, pageWidth, pageHeight,
+                       labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   if (face == Face::Spotify && home.permissions.spotifyControl) {
     GUI.drawSideButtonHints(renderer, "<< hold", "hold >>");
   } else if (face == Face::Lights && home.permissions.lightControl) {
@@ -524,7 +562,8 @@ void EinqClockActivity::drawMessageFace() {
   const int pageHeight = renderer.getScreenHeight();
 
   renderer.clearScreen();
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, messageSnapshot.title);
+  EinqCornerArt::drawFourCorners(renderer, pageWidth, pageHeight);
+  GUI.drawHeader(renderer, cornerSafeHeaderRect(metrics, pageWidth), messageSnapshot.title);
 
   const int bodyFont = NOTOSANS_14_FONT_ID;
   const int bodyH = renderer.getLineHeight(bodyFont);
@@ -543,12 +582,14 @@ void EinqClockActivity::drawMessageFace() {
   }
 
   const auto labels = mappedInput.mapLabels("CrossPoint", "", "", "");
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  drawCornerSafeFooter(renderer, metrics, pageWidth, pageHeight,
+                       labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   renderer.displayBuffer();
 }
 
 void EinqClockActivity::publishSnapshot(const struct tm* localTime) {
   EinqDisplaySnapshot snap {};
+  copySnapshotField(snap.theme, sizeof(snap.theme), EinqCornerArt::currentThemeId());
   if (messageMode) {
     copySnapshotField(snap.mode, sizeof(snap.mode), "message");
     copySnapshotField(snap.title, sizeof(snap.title), messageSnapshot.title);
@@ -630,11 +671,13 @@ void EinqClockActivity::drawFace() {
   localtime_r(&now, &localTime);
 
   if (messageMode) {
+    EinqBle::setAdvertisedCard(nullptr);
     drawMessageFace();
     publishSnapshot(nullptr);
     return;
   }
 
+  EinqBle::setAdvertisedCard(face == Face::Card && home.card.valid ? home.card.title : nullptr);
   if (face == Face::Day) {
     drawClockFace(localTime);
   } else {

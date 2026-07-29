@@ -1,0 +1,30 @@
+{
+  "max_size": 176,
+  "themes": [
+    {
+      "id": "art-nouveau-vine",
+      "source": "assets/generated/corners/art-nouveau-vine-bottom-left.png",
+      "seasons": ["all"]
+    },
+    {
+      "id": "winter-holly-pine",
+      "source": "assets/corner-themes/winter.png",
+      "seasons": ["winter"]
+    },
+    {
+      "id": "spring-iris-fern",
+      "source": "assets/corner-themes/spring.png",
+      "seasons": ["spring"]
+    },
+    {
+      "id": "summer-grapevine",
+      "source": "assets/corner-themes/summer.png",
+      "seasons": ["summer"]
+    },
+    {
+      "id": "autumn-oak-acorn",
+      "source": "assets/corner-themes/autumn.png",
+      "seasons": ["autumn"]
+    }
+  ]
+}

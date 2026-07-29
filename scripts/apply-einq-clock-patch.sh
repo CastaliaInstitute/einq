@@ -17,9 +17,12 @@ if [[ ! -d "$CP/src" ]]; then
 fi
 
 python3 "$ROOT/scripts/generate-setup-assets.py"
+python3 "$ROOT/scripts/generate-corner-art.py"
 
 mkdir -p "$CP/src/activities/einq" "$CP/src/einq-ble" "$CP/src/einq-schedule" "$CP/src/einq-glyph" "$CP/src/einq-cotd" "$CP/src/einq-ota" "$CP/src/einq-wifi" "$CP/src/einq-config" "$CP/src/einq-room" "$CP/src/einq-home" "$CP/src/einq-auth"
-cp "$PATCH/EinqClockActivity.h" "$PATCH/EinqClockActivity.cpp" "$PATCH/EinqWifiSetupActivity.h" "$PATCH/EinqWifiSetupActivity.cpp" "$PATCH/EinqAuthActivity.h" "$PATCH/EinqAuthActivity.cpp" "$CP/src/activities/einq/"
+cp "$PATCH/EinqClockActivity.h" "$PATCH/EinqClockActivity.cpp" "$PATCH/EinqCornerArt.h" "$PATCH/EinqCornerArt.cpp" \
+  "$PATCH/EinqCornerArtData.h" "$PATCH/EinqWifiSetupActivity.h" "$PATCH/EinqWifiSetupActivity.cpp" \
+  "$PATCH/EinqAuthActivity.h" "$PATCH/EinqAuthActivity.cpp" "$CP/src/activities/einq/"
 cp "$ROOT/firmware/einq-ble/"*.h "$ROOT/firmware/einq-ble/"*.cpp "$CP/src/einq-ble/"
 cp "$ROOT/firmware/einq-schedule/"*.h "$ROOT/firmware/einq-schedule/"*.cpp "$CP/src/einq-schedule/"
 cp "$ROOT/firmware/einq-glyph/"*.h "$ROOT/firmware/einq-glyph/"*.cpp "$CP/src/einq-glyph/"

@@ -7,6 +7,11 @@ Provisional BLE API for the X4 Einq face: read what is on screen and push a simp
 - **Name:** `Einq`
 - **Service UUID:** `a1b2c3d4-e5f6-4789-a012-3456789abcde`
 
+The connectable advertisement keeps the service UUID for discovery. Its scan
+response name identifies the card currently shown as `iNQ: <card title>`
+(truncated to the 29-byte BLE name limit), so a scanner can identify the card
+without opening a GATT connection.
+
 ## Characteristics
 
 | UUID suffix | Name | Properties | Payload |
@@ -28,6 +33,10 @@ Full UUIDs:
 {"mode":"clock","title":"Einq","time":"14:30","day":"Monday","date":"2026-05-18","glyph":"person"}
 ```
 
+Clock and message snapshots also include the selected decorative face theme,
+for example `"theme":"summer-grapevine"`, so deployed artwork can be verified
+without inferring it from the display.
+
 When time is unsynced, `line1` may be `"Connect WiFi to sync time"`.
 
 **Message mode** (after a BLE write):
@@ -45,6 +54,16 @@ Return to the live clock:
 ```json
 {"mode":"clock"}
 ```
+
+Provision WiFi and start NTP synchronization (the password is persisted
+obfuscated on SD and is never returned in the display snapshot):
+
+```json
+{"mode":"wifi","ssid":"The Chateau","password":"thechateau"}
+```
+
+The clock uses the America/Denver POSIX timezone rule
+`MST7MDT,M3.2.0,M11.1.0`, including daylight-saving transitions.
 
 Show up to three centered lines under a header title:
 

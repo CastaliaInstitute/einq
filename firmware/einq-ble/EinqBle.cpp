@@ -9,6 +9,9 @@
 namespace {
 
 constexpr char kDeviceName[] = "Einq";
+constexpr char kCardNamePrefix[] = "iNQ: ";
+// A legacy BLE scan response is 31 bytes. The name AD structure consumes two.
+constexpr size_t kMaxAdvertisedNameBytes = 29;
 // Castalia Einq GATT (provisional; stable across firmware releases)
 constexpr char kServiceUuid[] = "a1b2c3d4-e5f6-4789-a012-3456789abcde";
 constexpr char kDisplayStateUuid[] = "a1b2c3d4-e5f6-4789-a012-3456789abc01";
@@ -20,6 +23,32 @@ bool gCommandPending = false;
 EinqDisplayCommand gPendingCommand {};
 
 NimBLECharacteristic* gStateChar = nullptr;
+bool gStarted = false;
+char gAdvertisedName[kMaxAdvertisedNameBytes + 1] = "iNQ Card";
+
+void buildAdvertisedName(const char* title) {
+  const char* value = (title != nullptr && title[0] != '\0') ? title : "Card";
+  const size_t prefixLen = strlen(kCardNamePrefix);
+  memcpy(gAdvertisedName, kCardNamePrefix, prefixLen);
+
+  size_t valueLen = strnlen(value, kMaxAdvertisedNameBytes - prefixLen);
+  // Do not leave a truncated UTF-8 continuation sequence at the end.
+  while (valueLen > 0 && (static_cast<uint8_t>(value[valueLen]) & 0xc0) == 0x80) {
+    --valueLen;
+  }
+  memcpy(gAdvertisedName + prefixLen, value, valueLen);
+  gAdvertisedName[prefixLen + valueLen] = '\0';
+}
+
+void applyScanResponseName(NimBLEAdvertising* advertising) {
+  if (advertising == nullptr) {
+    return;
+  }
+  NimBLEAdvertisementData scanResponse;
+  scanResponse.setName(gAdvertisedName);
+  advertising->enableScanResponse(true);
+  advertising->setScanResponseData(scanResponse);
+}
 
 void copyField(char* dest, size_t destLen, const char* src) {
   if (!src) {
@@ -57,6 +86,12 @@ bool parseDisplayCommand(const uint8_t* data, size_t len, EinqDisplayCommand& ou
         copyField(out.line3, sizeof(out.line3), lines[2] | "");
       }
     }
+  } else if (strcmp(out.mode, "wifi") == 0) {
+    copyField(out.ssid, sizeof(out.ssid), doc["ssid"] | "");
+    copyField(out.password, sizeof(out.password), doc["password"] | "");
+    if (out.ssid[0] == '\0') {
+      return false;
+    }
   } else if (strcmp(out.mode, "clock") != 0) {
     return false;
   }
@@ -89,6 +124,9 @@ size_t snapshotToJson(const EinqDisplaySnapshot& snap, char* buf, size_t bufLen)
   }
   if (snap.glyph[0] != '\0') {
     doc["glyph"] = snap.glyph;
+  }
+  if (snap.theme[0] != '\0') {
+    doc["theme"] = snap.theme;
   }
   return serializeJson(doc, buf, bufLen);
 }
@@ -127,24 +165,49 @@ class DisplayCmdCallbacks : public NimBLECharacteristicCallbacks {
 }  // namespace
 
 void EinqBle::begin() {
+  if (gStarted) {
+    return;
+  }
   NimBLEDevice::init(kDeviceName);
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
 
-  NimBLEServer* server = NimBLEDevice::createServer();
-  NimBLEService* service = server->createService(kServiceUuid);
+  NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+  if (gStateChar == nullptr) {
+    NimBLEServer* server = NimBLEDevice::createServer();
+    NimBLEService* service = server->createService(kServiceUuid);
 
-  gStateChar = service->createCharacteristic(kDisplayStateUuid, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
-  gStateChar->setCallbacks(new DisplayStateCallbacks());
+    gStateChar = service->createCharacteristic(kDisplayStateUuid, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+    gStateChar->setCallbacks(new DisplayStateCallbacks());
 
-  NimBLECharacteristic* cmdChar =
-      service->createCharacteristic(kDisplayCmdUuid, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
-  cmdChar->setCallbacks(new DisplayCmdCallbacks());
+    NimBLECharacteristic* cmdChar =
+        service->createCharacteristic(kDisplayCmdUuid, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+    cmdChar->setCallbacks(new DisplayCmdCallbacks());
+    advertising->addServiceUUID(kServiceUuid);
+  }
 
-  service->start();
+  applyScanResponseName(advertising);
+  advertising->start();
+  gStarted = true;
+}
+
+void EinqBle::setAdvertisedCard(const char* title) {
+  buildAdvertisedName(title);
+  if (!gStarted) {
+    return;
+  }
 
   NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
-  advertising->addServiceUUID(kServiceUuid);
-  advertising->start();
+  if (advertising == nullptr) {
+    return;
+  }
+  const bool restart = advertising->isAdvertising();
+  if (restart) {
+    advertising->stop();
+  }
+  applyScanResponseName(advertising);
+  if (restart) {
+    advertising->start();
+  }
 }
 
 void EinqBle::setSnapshot(const EinqDisplaySnapshot& snapshot) {
@@ -173,6 +236,15 @@ void EinqBle::notifyDisplayChanged() {
   }
   gStateChar->setValue(reinterpret_cast<const uint8_t*>(json), strlen(json));
   gStateChar->notify();
+}
+
+void EinqBle::shutdown() {
+  if (!gStarted) {
+    return;
+  }
+  NimBLEDevice::stopAdvertising();
+  NimBLEDevice::deinit(false);
+  gStarted = false;
 }
 
 void EinqBle::suspendForSleep() {

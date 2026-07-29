@@ -15,6 +15,36 @@ Requires PlatformIO + [pioarduino](https://github.com/pioarduino/pioarduino) per
 
 Patch sources: `apps/clock-face/patch/`
 
+### Corner themes
+
+The front-page ornaments are manifest-driven. Add a transparent master corner
+PNG to `assets/`, register it in `assets/corner-themes/manifest.json`, and run:
+
+```bash
+python3 scripts/generate-corner-art.py
+```
+
+Each unique image is packed to 1bpp once. A theme can provide one `source` that
+is flipped into all four corners, independent images under `corners`, or a
+master plus selected overrides:
+
+```json
+{
+  "id": "winter-holly",
+  "source": "assets/holly-master.png",
+  "corners": {
+    "top_right": "assets/holly-top-right.png",
+    "bottom_left": "assets/holly-bottom-left.png"
+  },
+  "seasons": ["winter"]
+}
+```
+
+Supported corner keys are `top_left`, `top_right`, `bottom_left`, and
+`bottom_right`. Themes may target `winter`, `spring`, `summer`, `autumn`, or
+`all`. When several themes are eligible for the current season, the firmware
+rotates them deterministically by day of year.
+
 ### BLE
 
 When built with the patch, the device advertises as **Einq** and exposes a GATT service to read the current face (clock or message) and push a simple text display. See [firmware/einq-ble/README.md](../../firmware/einq-ble/README.md).
