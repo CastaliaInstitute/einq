@@ -29,7 +29,6 @@ constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
 constexpr unsigned long HOME_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 constexpr unsigned long AUTH_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 constexpr unsigned long SIDE_BUTTON_LONG_PRESS_MS = 1200;
-constexpr unsigned long BLE_START_DELAY_MS = 15000;
 constexpr int kGlyphSize = 180;
 #ifndef EINQ_KEEP_AWAKE
 #define EINQ_KEEP_AWAKE 1
@@ -86,6 +85,15 @@ void beginWifiAttempt(const std::string& ssid, const std::string& password) {
   WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
   wifiBootstrapStarted = true;
   wifiBootstrapStartMs = millis();
+}
+
+void stopWifi() {
+  if (EinqWifiPortal::isRunning()) {
+    EinqWifiPortal::stop();
+  }
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  wifiBootstrapStarted = false;
 }
 
 void startFallbackAccessPoint() {
@@ -241,12 +249,15 @@ bool EinqClockActivity::ensureWifiForSync() {
     return true;
   }
   if (wifiSsid.empty()) {
-    tickWifiAndNtp();
-    if (wifiSsid.empty()) {
+    EinqWifiStore::Credentials primary {};
+    if (!EinqWifiStore::loadPrimary(primary)) {
       return false;
     }
+    wifiSsid = primary.ssid;
+    wifiPassword = primary.password;
   }
 
+  WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
   WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
   const unsigned long start = millis();
@@ -264,10 +275,14 @@ void EinqClockActivity::syncCotdForDate(const struct tm& localTime) {
   }
 
   EinqCotdCard next {};
-  if (ensureWifiForSync()) {
+  const bool online = ensureWifiForSync();
+  if (online) {
     EinqCotd::syncForDate(dateStr, next);
   } else {
     EinqCotd::loadCached(dateStr, next);
+  }
+  if (online) {
+    stopWifi();
   }
 
   if (next.valid) {
@@ -291,12 +306,14 @@ void EinqClockActivity::maybeMidnightOta(const struct tm& localTime) {
   char version[24];
   char url[sizeof(EinqOta::kDefaultFirmwareUrl) + 8];
   if (EinqOta::fetchManifest(version, sizeof(version), url, sizeof(url), nullptr) != EinqOta::Result::Ok) {
+    stopWifi();
     return;
   }
 
   copySnapshotField(otaCheckedDate, sizeof(otaCheckedDate), dateStr);
 
   if (!EinqOta::isNewerThanRunning(version)) {
+    stopWifi();
     return;
   }
 
@@ -368,11 +385,11 @@ void EinqClockActivity::drawClockFace(const struct tm& localTime) {
   } else if (!home.valid) {
     y += 24;
     renderer.drawCenteredText(SMALL_FONT_ID, y,
-                              EinqAuth::hasSession() ? "Waiting for today's weather" : "Pair with Castalia for your day",
+                              authSessionAvailable ? "Waiting for today's weather" : "Pair with Castalia for your day",
                               true);
   }
 
-  const auto labels = mappedInput.mapLabels("Home", EinqAuth::hasSession() ? "" : "Pair", "<", ">");
+  const auto labels = mappedInput.mapLabels("Home", authSessionAvailable ? "" : "Pair", "<", ">");
   drawCornerSafeFooter(renderer, metrics, pageWidth, pageHeight,
                        labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   GUI.drawSideButtonHints(renderer, "Prev", "Next");
@@ -446,6 +463,7 @@ void EinqClockActivity::performFaceAction(const char* requestedAction) {
   if (ensureWifiForSync() && EinqHome::sendAction(action, currentRoom)) {
     syncHome(true);
   }
+  stopWifi();
   actionPending = false;
   drawFace();
 }
@@ -703,20 +721,21 @@ void EinqClockActivity::onEnter() {
   home = {};
   face = Face::Day;
   actionPending = false;
+  authSessionAvailable = EinqAuth::hasSession();
+  stopWifi();
   wifiBootstrapStarted = false;
   ntpSyncAttempted = false;
   redrawAfterNtp = false;
   bleStarted = false;
   syncHome(false);
   drawFace();
-
-  time_t now = time(nullptr);
-  struct tm localTime {};
-  localtime_r(&now, &localTime);
-  if (validWallClock(localTime)) {
-    syncCotdForDate(localTime);
-    drawFace();
-  }
+  // BLE is the normal control and monitoring transport. Wi-Fi remains off
+  // until a sync, NTP, OTA, setup, or user action explicitly requests it.
+  EinqBle::begin();
+  EinqRoomScanner::begin();
+  bleStarted = true;
+  drawFace();
+  lastHomeSyncMs = millis();
 }
 
 void EinqClockActivity::openWifiSetup() {
@@ -731,9 +750,11 @@ void EinqClockActivity::openWifiSetup() {
 
 void EinqClockActivity::openCastaliaPairing() {
   startActivityForResult(std::make_unique<EinqAuthActivity>(renderer, mappedInput), [this](const ActivityResult&) {
-    if (EinqAuth::hasSession() && ensureWifiForSync()) {
+    authSessionAvailable = EinqAuth::hasSession();
+    if (authSessionAvailable && ensureWifiForSync()) {
       EinqAuth::refreshIfNeeded();
       syncHome(true);
+      stopWifi();
     }
     drawFace();
   });
@@ -796,7 +817,7 @@ void EinqClockActivity::loop() {
     return;
   }
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    if (face == Face::Day && !EinqAuth::hasSession()) {
+    if (face == Face::Day && !authSessionAvailable) {
       openCastaliaPairing();
     } else {
       performFaceAction();
@@ -824,23 +845,7 @@ void EinqClockActivity::loop() {
     return;
   }
 
-  tickWifiAndNtp();
   const unsigned long loopMs = millis();
-  // X3 temporarily holds substantially more display memory during its first
-  // refresh. Let Wi-Fi allocate esp_netif before starting NimBLE; otherwise
-  // first boot can assert in esp_netif_create_default_wifi_sta with a
-  // fragmented heap even though memory recovers immediately afterward.
-  if (!bleStarted && loopMs >= BLE_START_DELAY_MS) {
-    EinqBle::begin();
-    EinqRoomScanner::begin();
-    bleStarted = true;
-    drawFace();
-  }
-  if (WiFi.status() == WL_CONNECTED && EinqAuth::hasSession() &&
-      (lastAuthRefreshMs == 0 || loopMs - lastAuthRefreshMs >= AUTH_REFRESH_INTERVAL_MS)) {
-    lastAuthRefreshMs = loopMs;
-    EinqAuth::refreshIfNeeded();
-  }
   if (bleStarted) {
     EinqRoomScanner::poll();
   }
@@ -848,8 +853,9 @@ void EinqClockActivity::loop() {
   const EinqRoom::Result roomResult = EinqRoomScanner::current();
   if (roomResult.known && (roomResult.changed || strcmp(currentRoom, roomResult.room) != 0)) {
     copySnapshotField(currentRoom, sizeof(currentRoom), roomResult.room);
-    if (WiFi.status() == WL_CONNECTED) {
+    if (authSessionAvailable && ensureWifiForSync()) {
       syncHome(true);
+      stopWifi();
     }
     drawFace();
   }
@@ -862,9 +868,31 @@ void EinqClockActivity::loop() {
   const bool minuteTick = localTime.tm_min != lastMinute;
   const bool dayTick = localTime.tm_yday != lastDayOfYear;
   const bool periodic = nowMs - lastDrawMs >= 30000;
-  if (WiFi.status() == WL_CONNECTED &&
+  if (authSessionAvailable &&
       (lastHomeSyncMs == 0 || nowMs - lastHomeSyncMs >= HOME_SYNC_INTERVAL_MS)) {
-    syncHome(true);
+    // Timestamp the attempt as well as a success so a missing network does not
+    // turn the main loop into a continuous series of blocking reconnects.
+    lastHomeSyncMs = nowMs;
+    if (ensureWifiForSync()) {
+      if (!ntpSyncAttempted) {
+        syncTimeWithNTP();
+        ntpSyncAttempted = true;
+        redrawAfterNtp = true;
+      }
+      if (lastAuthRefreshMs == 0 || loopMs - lastAuthRefreshMs >= AUTH_REFRESH_INTERVAL_MS) {
+        lastAuthRefreshMs = loopMs;
+        EinqAuth::refreshIfNeeded();
+      }
+      syncHome(true);
+      stopWifi();
+    }
+  } else if (!validWallClock(localTime) && !ntpSyncAttempted) {
+    ntpSyncAttempted = true;
+    if (ensureWifiForSync()) {
+      syncTimeWithNTP();
+      redrawAfterNtp = true;
+      stopWifi();
+    }
   }
 
   if (redrawAfterNtp || minuteTick || dayTick || periodic) {

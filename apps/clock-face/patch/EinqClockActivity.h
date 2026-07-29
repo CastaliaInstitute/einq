@@ -38,6 +38,7 @@ class EinqClockActivity final : public Activity {
   Face face = Face::Day;
   bool actionPending = false;
   bool bleStarted = false;
+  bool authSessionAvailable = false;
 
   void drawClockFace(const struct tm& localTime);
   void drawHomeFace();
