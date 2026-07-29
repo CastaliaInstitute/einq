@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CP="${CROSSPOINT_DIR:-$ROOT/.vendor/crosspoint-reader}"
 PORT="${EINQ_PORT:-}"
-BAUD="${EINQ_BAUD:-921600}"
+BAUD="${EINQ_BAUD:-460800}"
 USE_PATCH="${EINQ_PATCH:-1}"
 FW_BIN="${EINQ_FIRMWARE:-}"
 
@@ -53,6 +53,7 @@ fi
 
 echo "Flashing $FW_BIN @ 0x10000 …"
 esptool.py --chip esp32c3 --port "$PORT" --baud "$BAUD" write_flash 0x10000 "$FW_BIN"
+esptool.py --chip esp32c3 --port "$PORT" --baud "$BAUD" verify_flash 0x10000 "$FW_BIN"
 
 if [[ "$USE_PATCH" == "1" ]]; then
   echo "Done. Boots to Einq clock; OTA via Settings → System → Check for updates"

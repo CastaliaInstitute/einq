@@ -368,4 +368,68 @@ EOF
   echo "added HomeActivity::onEinqWifiOpen"
 fi
 
+# Keep the two Einq rows in CrossPoint Home navigable. They sit between File
+# Transfer and Settings, so both activation and Settings' index must account
+# for them. This normalization targets current CrossPoint's enum-based menu
+# implementation and is idempotent on repeated patch runs.
+python3 - "$HOME_CPP" "$HOME_H" <<'PY'
+from pathlib import Path
+import sys
+
+home_cpp = Path(sys.argv[1])
+home_h = Path(sys.argv[2])
+
+text = home_cpp.read_text()
+needle = """    const int menuIndex = selectorIndex - static_cast<int>(recentBooks.size());
+    switch (indexToMenuItem(menuIndex, hasOpdsServers)) {
+"""
+replacement = """    const int menuIndex = selectorIndex - static_cast<int>(recentBooks.size());
+    const int einqClockIndex = 3 + (hasOpdsServers ? 1 : 0);
+    if (menuIndex == einqClockIndex) {
+      onEinqClockOpen();
+      return;
+    }
+    if (menuIndex == einqClockIndex + 1) {
+      onEinqWifiOpen();
+      return;
+    }
+    switch (indexToMenuItem(menuIndex, hasOpdsServers)) {
+"""
+if needle in text:
+    text = text.replace(needle, replacement, 1)
+elif "const int einqClockIndex = 3 + (hasOpdsServers ? 1 : 0);" not in text:
+    raise SystemExit("HomeActivity.cpp: could not normalize Einq menu activation")
+home_cpp.write_text(text)
+
+text = home_h.read_text()
+text = text.replace(
+    """    if (item == HomeMenuItem::FILE_TRANSFER) return i;
+    ++i;
+    if (item == HomeMenuItem::SETTINGS_MENU) return i;
+""",
+    """    if (item == HomeMenuItem::FILE_TRANSFER) return i;
+    i += 3;  // Einq Clock, Einq WiFi, then Settings
+    if (item == HomeMenuItem::SETTINGS_MENU) return i;
+""",
+    1,
+)
+text = text.replace(
+    """    if (hasOpdsUrl && idx == i++) return HomeMenuItem::OPDS_BROWSER;
+    if (idx == i++) return HomeMenuItem::FILE_TRANSFER;
+    if (idx == i) return HomeMenuItem::SETTINGS_MENU;
+""",
+    """    if (hasOpdsUrl && idx == i++) return HomeMenuItem::OPDS_BROWSER;
+    if (idx == i++) return HomeMenuItem::FILE_TRANSFER;
+    i += 2;  // Einq Clock and Einq WiFi
+    if (idx == i) return HomeMenuItem::SETTINGS_MENU;
+""",
+    1,
+)
+if "i += 3;  // Einq Clock, Einq WiFi, then Settings" not in text or \
+        "i += 2;  // Einq Clock and Einq WiFi" not in text:
+    raise SystemExit("HomeActivity.h: could not normalize Einq menu indices")
+home_h.write_text(text)
+print("normalized CrossPoint Home Einq navigation")
+PY
+
 echo "Einq patch applied (clock + BLE GATT; auto-start on boot; Back → CrossPoint home)"
