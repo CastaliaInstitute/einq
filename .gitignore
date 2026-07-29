@@ -8,3 +8,4 @@ apps/clock-face/sd/.crosspoint/wifi.json
 __pycache__/
 .pio/
 .vscode/
+device-backups/

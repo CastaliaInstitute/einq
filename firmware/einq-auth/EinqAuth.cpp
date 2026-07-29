@@ -76,6 +76,17 @@ std::string configuredGateway() {
   return gateway;
 }
 
+void appendCastaliaIdentity(std::string& redirectPath) {
+  JsonDocument config;
+  if (deserializeJson(config, EinqConfigStore::load())) return;
+  const char* individual = config["individual"] | "dcmcshan";
+  const char* repository = config["individualRepo"] | "CastaliaInstitute/castalia-dcmcshan";
+  const char* settingsPath = config["settingsPath"] | "settings/faces.json";
+  if (individual[0] != '\0') redirectPath += "&individual=" + encodeQuery(individual);
+  if (repository[0] != '\0') redirectPath += "&repo=" + encodeQuery(repository);
+  if (settingsPath[0] != '\0') redirectPath += "&settings=" + encodeQuery(settingsPath);
+}
+
 bool requestJson(const char* url, bool post, const char* body, JsonDocument& output) {
   NetworkClientSecure client;
   client.setInsecure();
@@ -122,8 +133,9 @@ bool startPairing(EinqPairing& out) {
 
   copyField(out.pairId, sizeof(out.pairId), pairId);
   copyField(out.pairSecret, sizeof(out.pairSecret), pairSecret);
-  const std::string redirectPath =
+  std::string redirectPath =
       std::string("/auth/mynah-device/?pair=") + pairId + "&key=" + encodeQuery(pairSecret) + "&device=einq";
+  appendCastaliaIdentity(redirectPath);
   const std::string signInUrl = std::string(kSignInBase) + encodeQuery(redirectPath.c_str());
   copyField(out.signInUrl, sizeof(out.signInUrl), signInUrl.c_str());
   out.valid = out.signInUrl[0] != '\0';
