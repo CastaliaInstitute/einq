@@ -26,7 +26,7 @@
 
 namespace {
 constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
-constexpr unsigned long HOME_SYNC_INTERVAL_MS = 15 * 60 * 1000;
+constexpr unsigned long DAILY_SYNC_INTERVAL_MS = 24UL * 60 * 60 * 1000;
 constexpr unsigned long AUTH_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 constexpr unsigned long SIDE_BUTTON_LONG_PRESS_MS = 1200;
 constexpr int kGlyphSize = 180;
@@ -869,7 +869,7 @@ void EinqClockActivity::loop() {
   const bool dayTick = localTime.tm_yday != lastDayOfYear;
   const bool periodic = nowMs - lastDrawMs >= 30000;
   if (authSessionAvailable &&
-      (lastHomeSyncMs == 0 || nowMs - lastHomeSyncMs >= HOME_SYNC_INTERVAL_MS)) {
+      (lastHomeSyncMs == 0 || nowMs - lastHomeSyncMs >= DAILY_SYNC_INTERVAL_MS)) {
     // Timestamp the attempt as well as a success so a missing network does not
     // turn the main loop into a continuous series of blocking reconnects.
     lastHomeSyncMs = nowMs;
