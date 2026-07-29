@@ -29,6 +29,7 @@ constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;
 constexpr unsigned long HOME_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 constexpr unsigned long AUTH_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 constexpr unsigned long SIDE_BUTTON_LONG_PRESS_MS = 1200;
+constexpr unsigned long BLE_START_DELAY_MS = 15000;
 constexpr int kGlyphSize = 180;
 #ifndef EINQ_KEEP_AWAKE
 #define EINQ_KEEP_AWAKE 1
@@ -705,8 +706,7 @@ void EinqClockActivity::onEnter() {
   wifiBootstrapStarted = false;
   ntpSyncAttempted = false;
   redrawAfterNtp = false;
-  EinqBle::begin();
-  EinqRoomScanner::begin();
+  bleStarted = false;
   syncHome(false);
   drawFace();
 
@@ -826,12 +826,24 @@ void EinqClockActivity::loop() {
 
   tickWifiAndNtp();
   const unsigned long loopMs = millis();
+  // X3 temporarily holds substantially more display memory during its first
+  // refresh. Let Wi-Fi allocate esp_netif before starting NimBLE; otherwise
+  // first boot can assert in esp_netif_create_default_wifi_sta with a
+  // fragmented heap even though memory recovers immediately afterward.
+  if (!bleStarted && loopMs >= BLE_START_DELAY_MS) {
+    EinqBle::begin();
+    EinqRoomScanner::begin();
+    bleStarted = true;
+    drawFace();
+  }
   if (WiFi.status() == WL_CONNECTED && EinqAuth::hasSession() &&
       (lastAuthRefreshMs == 0 || loopMs - lastAuthRefreshMs >= AUTH_REFRESH_INTERVAL_MS)) {
     lastAuthRefreshMs = loopMs;
     EinqAuth::refreshIfNeeded();
   }
-  EinqRoomScanner::poll();
+  if (bleStarted) {
+    EinqRoomScanner::poll();
+  }
 
   const EinqRoom::Result roomResult = EinqRoomScanner::current();
   if (roomResult.known && (roomResult.changed || strcmp(currentRoom, roomResult.room) != 0)) {
