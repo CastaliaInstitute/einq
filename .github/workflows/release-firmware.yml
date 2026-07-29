@@ -53,7 +53,7 @@ jobs:
       - name: Install pioarduino PlatformIO
         run: |
           uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
-          uv pip install --system 'littlefs-python>=0.16.0' 'fatfs-ng>=0.1.14'
+          uv pip install --system 'littlefs-python>=0.16.0' 'fatfs-ng>=0.1.14' 'Pillow>=11.0'
 
       - name: Clone CrossPoint
         run: git clone --depth 1 --recursive https://github.com/crosspoint-reader/crosspoint-reader.git .vendor/crosspoint-reader
