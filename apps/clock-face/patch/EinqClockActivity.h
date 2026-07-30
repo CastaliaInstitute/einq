@@ -18,6 +18,7 @@ class EinqClockActivity final : public Activity {
     Quote,
     Mindfulness,
     Library,
+    Codex,
     SelfWeather,
     Synastry,
     Family,
@@ -45,6 +46,7 @@ class EinqClockActivity final : public Activity {
   bool actionPending = false;
   bool bleStarted = false;
   bool authSessionAvailable = false;
+  size_t codexSelectedIndex = 0;
 
   void drawClockFace(const struct tm& localTime);
   void drawHomeFace();
@@ -57,6 +59,7 @@ class EinqClockActivity final : public Activity {
   bool faceAvailable(Face candidate) const;
   void moveFace(int direction);
   void performFaceAction(const char* requestedAction = nullptr);
+  void moveCodexTask(int direction);
   void openWifiSetup();
   void openCastaliaPairing();
   bool ensureWifiForSync();

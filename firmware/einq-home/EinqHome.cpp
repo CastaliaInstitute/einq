@@ -125,6 +125,33 @@ bool parsePayload(const char* json, size_t length, EinqHomePayload& output) {
     if (next.valid) output.taskCount++;
   }
 
+  const JsonObjectConst codex = document["codex"].as<JsonObjectConst>();
+  if (!codex.isNull()) {
+    output.codex.revision = codex["revision"] | 0U;
+    output.codex.selectedIndex = codex["selectedIndex"] | 0U;
+    const JsonArrayConst codexTasks = codex["tasks"].as<JsonArrayConst>();
+    for (const JsonObjectConst task : codexTasks) {
+      if (output.codex.taskCount >= 12) break;
+      EinqHomeCodexTask& next = output.codex.tasks[output.codex.taskCount];
+      copyField(next.id, sizeof(next.id), task["id"] | "");
+      copyField(next.host, sizeof(next.host), firstText(task, "host", "hostName", "hostId"));
+      copyField(next.title, sizeof(next.title), task["title"] | "");
+      copyField(next.model, sizeof(next.model), task["model"] | "");
+      copyField(next.speed, sizeof(next.speed), task["speed"] | "");
+      copyField(next.status, sizeof(next.status), task["status"] | "idle");
+      next.pinned = task["pinned"] | false;
+      const JsonObjectConst usage = task["usage"].as<JsonObjectConst>();
+      next.totalTokens = usage["totalTokens"] | 0U;
+      next.rateTokensPerMinute = usage["rateTokensPerMinute"] | 0U;
+      next.valid = next.id[0] != '\0' && next.title[0] != '\0';
+      if (next.valid) output.codex.taskCount++;
+    }
+    if (output.codex.taskCount > 0) {
+      if (output.codex.selectedIndex >= output.codex.taskCount) output.codex.selectedIndex = 0;
+      output.codex.valid = true;
+    }
+  }
+
   const JsonObjectConst library = document["library"].as<JsonObjectConst>();
   if (!library.isNull()) {
     copyField(output.library.catalogUrl, sizeof(output.library.catalogUrl), library["catalogUrl"] | "");
@@ -168,13 +195,15 @@ bool parsePayload(const char* json, size_t length, EinqHomePayload& output) {
   output.permissions.cards = permissions["cards"] | true;
   output.permissions.spotifyControl = permissions["spotifyControl"] | false;
   output.permissions.lightControl = permissions["lightControl"] | false;
+  output.permissions.codexControl = permissions["codexControl"] | false;
   output.permissions.administration = permissions["administration"] | false;
 
   output.valid = output.nextEvent.valid || output.weather.valid || output.dayAphorism.valid ||
                  output.selfWeather.valid || output.synastryWeather.valid || output.familyCount > 0 ||
                  output.fortune.valid || output.card.valid || output.news.valid || output.art.valid ||
                  output.quote.valid || output.mindfulness.valid || output.taskCount > 0 ||
-                 output.library.valid || output.spotify.connected || output.lights.available;
+                 output.library.valid || output.codex.valid || output.spotify.connected ||
+                 output.lights.available;
   return output.valid;
 }
 
@@ -327,6 +356,10 @@ bool sync(const char* room, EinqHomePayload& out) {
 }
 
 bool sendAction(const char* action, const char* room) {
+  return sendAction(action, room, nullptr);
+}
+
+bool sendAction(const char* action, const char* room, const char* taskId) {
   if (action == nullptr || action[0] == '\0' || WiFi.status() != WL_CONNECTED) {
     return false;
   }
@@ -340,6 +373,9 @@ bool sendAction(const char* action, const char* room) {
   document["action"] = action;
   if (room != nullptr && room[0] != '\0') {
     document["room"] = room;
+  }
+  if (taskId != nullptr && taskId[0] != '\0') {
+    document["taskId"] = taskId;
   }
   String body;
   serializeJson(document, body);

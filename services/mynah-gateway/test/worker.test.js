@@ -16,6 +16,7 @@ const session = {
     cards: true,
     spotifyControl: true,
     lightControl: true,
+    codexControl: true,
     administration: true
   },
   rooms: {
@@ -81,6 +82,11 @@ test("home payload aggregates content and HA state while redacting kid calendar 
           revision: "abc123",
           bookCount: 12,
           changedCount: 2
+        },
+        codex: {
+          revision: 7,
+          selectedIndex: 0,
+          tasks: [{ id: "thread-1", title: "Build the Codex face", status: "running" }]
         }
       });
     }
@@ -128,6 +134,7 @@ test("home payload aggregates content and HA state while redacting kid calendar 
   assert.equal(body.mindfulness.title, "Three breaths");
   assert.equal(body.today.tasks[0].title, "Return a library book");
   assert.equal(body.library.bookCount, 12);
+  assert.equal(body.codex.tasks[0].id, "thread-1");
   assert.equal(body.permissions.administration, false);
   assert.ok(calls.some((call) => call.url.includes("room=Kitchen")));
 });
@@ -291,6 +298,29 @@ test("context actions control Spotify tracks and room light brightness", async (
     entity_id: ["light.kitchen_1", "light.kitchen_2"],
     brightness_step_pct: 10
   });
+});
+
+test("Codex actions select a task before forwarding its context action", async () => {
+  const calls = [];
+  const gateway = createGateway({
+    fetchImpl: async (input, options) => {
+      calls.push({ url: String(input), options });
+      return response({ ok: true });
+    }
+  });
+  const result = await gateway.fetch(
+    request("/api/v1/device/actions", {
+      method: "POST",
+      body: JSON.stringify({ action: "codex.approve", taskId: "thread-1" })
+    }),
+    { ...env, CODEX_SERVICE_URL: "http://astrolabe.local" }
+  );
+
+  assert.equal(result.status, 200);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(JSON.parse(calls[0].options.body), { action: "select", task_id: "thread-1" });
+  assert.deepEqual(JSON.parse(calls[1].options.body), { action: "approve" });
+  assert.equal(calls[0].options.headers["X-Astrolabe-Codex"], "sync-v1");
 });
 
 test("missing or ungranted device actions are rejected", async () => {

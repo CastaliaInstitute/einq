@@ -215,6 +215,8 @@ const char* faceLabel(EinqClockActivity::Face face) {
       return "Mindfulness";
     case EinqClockActivity::Face::Library:
       return "Library";
+    case EinqClockActivity::Face::Codex:
+      return "Codex";
     case EinqClockActivity::Face::SelfWeather:
       return "Self Weather";
     case EinqClockActivity::Face::Synastry:
@@ -433,6 +435,8 @@ bool EinqClockActivity::faceAvailable(Face candidate) const {
       return home.valid && home.mindfulness.valid;
     case Face::Library:
       return home.valid && home.library.valid;
+    case Face::Codex:
+      return home.valid && home.codex.valid;
     case Face::SelfWeather:
       return home.valid && home.permissions.astrology && home.selfWeather.valid;
     case Face::Synastry:
@@ -452,7 +456,7 @@ bool EinqClockActivity::faceAvailable(Face candidate) const {
 }
 
 void EinqClockActivity::moveFace(int direction) {
-  constexpr int faceCount = 15;
+  constexpr int faceCount = 16;
   int candidate = static_cast<int>(face);
   for (int attempt = 0; attempt < faceCount; attempt++) {
     candidate = (candidate + direction + faceCount) % faceCount;
@@ -472,6 +476,9 @@ void EinqClockActivity::syncHome(bool allowNetwork) {
     return;
   }
   home = next;
+  if (codexSelectedIndex >= home.codex.taskCount) {
+    codexSelectedIndex = home.codex.selectedIndex;
+  }
   lastHomeSyncMs = millis();
   if (!faceAvailable(face)) {
     face = Face::Day;
@@ -480,10 +487,18 @@ void EinqClockActivity::syncHome(bool allowNetwork) {
 
 void EinqClockActivity::performFaceAction(const char* requestedAction) {
   const char* action = requestedAction;
+  const char* taskId = nullptr;
   if (action == nullptr && face == Face::Spotify && home.permissions.spotifyControl && home.spotify.connected) {
     action = "spotify.toggle";
   } else if (action == nullptr && face == Face::Lights && home.permissions.lightControl && home.lights.available) {
     action = "lights.toggle";
+  } else if (action == nullptr && face == Face::Codex && home.permissions.codexControl &&
+             codexSelectedIndex < home.codex.taskCount) {
+    const EinqHomeCodexTask& task = home.codex.tasks[codexSelectedIndex];
+    taskId = task.id;
+    if (strcmp(task.status, "waiting-approval") == 0) action = "codex.approve";
+    else if (strcmp(task.status, "running") == 0) action = "codex.interrupt";
+    else action = "codex.open";
   }
   if (action == nullptr) {
     return;
@@ -491,11 +506,18 @@ void EinqClockActivity::performFaceAction(const char* requestedAction) {
 
   actionPending = true;
   drawFace();
-  if (ensureWifiForSync() && EinqHome::sendAction(action, currentRoom)) {
+  if (ensureWifiForSync() && EinqHome::sendAction(action, currentRoom, taskId)) {
     syncHome(true);
   }
   stopWifi();
   actionPending = false;
+  drawFace();
+}
+
+void EinqClockActivity::moveCodexTask(int direction) {
+  if (!home.codex.taskCount) return;
+  const int count = static_cast<int>(home.codex.taskCount);
+  codexSelectedIndex = static_cast<size_t>((static_cast<int>(codexSelectedIndex) + direction + count) % count);
   drawFace();
 }
 
@@ -545,6 +567,26 @@ void EinqClockActivity::drawHomeFace() {
       snprintf(status, sizeof(status), "%u books  %u changed",
                home.library.bookCount, home.library.changedCount);
       summary = home.library.changedCount > 0 ? "New books are ready to sync to SD." : "Library is up to date.";
+      break;
+    case Face::Codex:
+      if (codexSelectedIndex < home.codex.taskCount) {
+        const EinqHomeCodexTask& task = home.codex.tasks[codexSelectedIndex];
+        title = task.title;
+        snprintf(status, sizeof(status), "%s%s%s  %s  %u/%u",
+                 task.model, task.model[0] && task.speed[0] ? " / " : "", task.speed,
+                 task.status, static_cast<unsigned>(codexSelectedIndex + 1),
+                 static_cast<unsigned>(home.codex.taskCount));
+        static char codexSummary[96];
+        if (task.totalTokens || task.rateTokensPerMinute) {
+          snprintf(codexSummary, sizeof(codexSummary), "%s%s%u tokens  %u/min",
+                   task.pinned ? "Pinned  " : "", task.host[0] ? task.host : "",
+                   task.totalTokens, task.rateTokensPerMinute);
+        } else {
+          snprintf(codexSummary, sizeof(codexSummary), "%s%s",
+                   task.pinned ? "Pinned  " : "", task.host);
+        }
+        summary = codexSummary;
+      }
       break;
     case Face::SelfWeather:
       title = home.selfWeather.title;
@@ -627,12 +669,15 @@ void EinqClockActivity::drawHomeFace() {
   if (actionPending) {
     renderer.drawCenteredText(smallFont, pageHeight - 112, "Sending...", true);
   } else if ((face == Face::Spotify && home.permissions.spotifyControl) ||
-             (face == Face::Lights && home.permissions.lightControl)) {
-    renderer.drawCenteredText(smallFont, pageHeight - 112, "Press OK to toggle", true);
+             (face == Face::Lights && home.permissions.lightControl) ||
+             (face == Face::Codex && home.permissions.codexControl)) {
+    renderer.drawCenteredText(smallFont, pageHeight - 112,
+                              face == Face::Codex ? "OK acts on selected task" : "Press OK to toggle", true);
   }
 
   const bool actionable = (face == Face::Spotify && home.permissions.spotifyControl) ||
-                          (face == Face::Lights && home.permissions.lightControl);
+                          (face == Face::Lights && home.permissions.lightControl) ||
+                          (face == Face::Codex && home.permissions.codexControl);
   const auto labels = mappedInput.mapLabels("Home", actionable ? "OK" : "", "<", ">");
   drawCornerSafeFooter(renderer, metrics, pageWidth, pageHeight,
                        labels.btn1, labels.btn2, labels.btn3, labels.btn4);
@@ -640,6 +685,8 @@ void EinqClockActivity::drawHomeFace() {
     GUI.drawSideButtonHints(renderer, "<< hold", "hold >>");
   } else if (face == Face::Lights && home.permissions.lightControl) {
     GUI.drawSideButtonHints(renderer, "- hold", "hold +");
+  } else if (face == Face::Codex) {
+    GUI.drawSideButtonHints(renderer, "task - hold", "hold task +");
   } else {
     GUI.drawSideButtonHints(renderer, "Prev", "Next");
   }
@@ -721,6 +768,14 @@ void EinqClockActivity::publishSnapshot(const struct tm* localTime) {
         copySnapshotField(snap.line1, sizeof(snap.line1), "EPUB library");
         snprintf(snap.line2, sizeof(snap.line2), "%u books", home.library.bookCount);
         snprintf(snap.line3, sizeof(snap.line3), "%u changed", home.library.changedCount);
+        break;
+      case Face::Codex:
+        if (codexSelectedIndex < home.codex.taskCount) {
+          const EinqHomeCodexTask& task = home.codex.tasks[codexSelectedIndex];
+          copySnapshotField(snap.line1, sizeof(snap.line1), task.title);
+          copySnapshotField(snap.line2, sizeof(snap.line2), task.status);
+          copySnapshotField(snap.line3, sizeof(snap.line3), task.host);
+        }
         break;
       case Face::SelfWeather:
         copySnapshotField(snap.line1, sizeof(snap.line1), home.selfWeather.title);
@@ -821,6 +876,7 @@ void EinqClockActivity::onEnter() {
   face = Face::Day;
   actionPending = false;
   authSessionAvailable = EinqAuth::hasSession();
+  codexSelectedIndex = 0;
   stopWifi();
   wifiBootstrapStarted = false;
   ntpSyncAttempted = false;
@@ -878,6 +934,8 @@ void EinqClockActivity::loop() {
         performFaceAction("spotify.previous");
       } else if (face == Face::Lights && home.permissions.lightControl) {
         performFaceAction("lights.dimmer");
+      } else if (face == Face::Codex) {
+        moveCodexTask(-1);
       } else {
         openCastaliaPairing();
       }
@@ -893,6 +951,8 @@ void EinqClockActivity::loop() {
         performFaceAction("spotify.next");
       } else if (face == Face::Lights && home.permissions.lightControl) {
         performFaceAction("lights.brighter");
+      } else if (face == Face::Codex) {
+        moveCodexTask(1);
       } else {
         openWifiSetup();
       }

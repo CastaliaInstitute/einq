@@ -33,6 +33,27 @@ struct EinqHomeTask {
   bool valid = false;
 };
 
+struct EinqHomeCodexTask {
+  char id[49] {};
+  char host[29] {};
+  char title[65] {};
+  char model[17] {};
+  char speed[17] {};
+  char status[24] {};
+  unsigned int totalTokens = 0;
+  unsigned int rateTokensPerMinute = 0;
+  bool pinned = false;
+  bool valid = false;
+};
+
+struct EinqHomeCodex {
+  EinqHomeCodexTask tasks[12] {};
+  size_t taskCount = 0;
+  size_t selectedIndex = 0;
+  unsigned int revision = 0;
+  bool valid = false;
+};
+
 struct EinqHomeLibrary {
   char catalogUrl[192] {};
   char revision[65] {};
@@ -85,6 +106,7 @@ struct EinqHomePermissions {
   bool cards = true;
   bool spotifyControl = false;
   bool lightControl = false;
+  bool codexControl = false;
   bool administration = false;
 };
 
@@ -108,6 +130,7 @@ struct EinqHomePayload {
   EinqHomeReading mindfulness {};
   EinqHomeTask tasks[6] {};
   size_t taskCount = 0;
+  EinqHomeCodex codex {};
   EinqHomeLibrary library {};
   EinqHomeSpotify spotify {};
   EinqHomeLights lights {};
@@ -122,5 +145,6 @@ bool loadCached(EinqHomePayload& out);
 bool fetchAndCache(const char* room, EinqHomePayload& out);
 bool sync(const char* room, EinqHomePayload& out);
 bool sendAction(const char* action, const char* room);
+bool sendAction(const char* action, const char* room, const char* taskId);
 
 }  // namespace EinqHome

@@ -210,6 +210,7 @@ function permissionsFor(session) {
     cards: granted.cards !== false,
     spotifyControl: granted.spotifyControl === true,
     lightControl: granted.lightControl === true,
+    codexControl: granted.codexControl === true,
     administration: session.profile === "parent" && granted.administration === true
   };
 }
@@ -252,6 +253,7 @@ async function homePayload(fetchImpl, env, session, roomName, requestedCalendar,
     quote: content.quote || content.quoteOfTheDay || null,
     mindfulness: content.mindfulness || null,
     library: content.library || null,
+    codex: content.codex || null,
     settings: content.settings || null,
     ota: content.ota || null,
     spotify,
@@ -260,7 +262,7 @@ async function homePayload(fetchImpl, env, session, roomName, requestedCalendar,
   };
 }
 
-async function performAction(fetchImpl, env, session, action, roomName) {
+async function performAction(fetchImpl, env, session, action, roomName, taskId) {
   const room = roomConfig(session, roomName);
   const permissions = permissionsFor(session);
   if (action === "spotify.toggle" && permissions.spotifyControl) {
@@ -280,6 +282,34 @@ async function performAction(fetchImpl, env, session, action, roomName) {
   }
   if (action === "lights.brighter" && permissions.lightControl) {
     return haService(fetchImpl, env, "light", "turn_on", room.lightEntities || [], { brightness_step_pct: 10 });
+  }
+  const codexActions = {
+    "codex.open": "open",
+    "codex.interrupt": "interrupt",
+    "codex.approve": "approve",
+    "codex.pin-toggle": "pin-toggle"
+  };
+  if (codexActions[action] && permissions.codexControl && env.CODEX_SERVICE_URL && taskId) {
+    const headers = { "content-type": "application/json", "X-Astrolabe-Codex": "sync-v1" };
+    if (env.CODEX_SERVICE_TOKEN) headers.authorization = `Bearer ${env.CODEX_SERVICE_TOKEN}`;
+    const response = await fetchImpl(
+      `${env.CODEX_SERVICE_URL.replace(/\/+$/, "")}/api/codex/action`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: "select", task_id: taskId })
+      }
+    );
+    if (!response.ok) return false;
+    const actionResponse = await fetchImpl(
+      `${env.CODEX_SERVICE_URL.replace(/\/+$/, "")}/api/codex/action`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action: codexActions[action] })
+      }
+    );
+    return actionResponse.ok;
   }
   return false;
 }
@@ -361,7 +391,7 @@ export function createGateway({ fetchImpl = globalThis.fetch, now = () => new Da
         } catch {
           return json({ error: "invalid_json" }, 400);
         }
-        const accepted = await performAction(fetchImpl, env, session, body.action, body.room);
+        const accepted = await performAction(fetchImpl, env, session, body.action, body.room, body.taskId);
         return accepted ? json({ ok: true }) : json({ error: "forbidden_or_unavailable" }, 403);
       }
 
