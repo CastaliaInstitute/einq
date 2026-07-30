@@ -19,7 +19,7 @@ Published at **https://einq.castalia.institute/firmware.json** (with matching **
 
 ```json
 {
-  "version": "1.4.9",
+  "version": "1.4.10",
   "url": "https://einq.castalia.institute/firmware.bin",
   "size": 6091799
 }
@@ -34,13 +34,13 @@ The midnight auto-update reads this manifest, compares semver to the running bui
 
 ## Publish a release (maintainers)
 
-1. Bump [`firmware/einq-version`](../firmware/einq-version) (e.g. `1.4.8` → `1.4.9`).
+1. Bump [`firmware/einq-version`](../firmware/einq-version) (e.g. `1.4.9` → `1.4.10`).
 2. Commit, tag, and push:
 
 ```bash
 git add firmware/einq-version
-git commit -m "Release firmware 1.4.9"
-git tag 1.4.9
+git commit -m "Release firmware 1.4.10"
+git tag 1.4.10
 git push origin main --tags
 ```
 

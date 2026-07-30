@@ -326,10 +326,12 @@ export function createGateway({ fetchImpl = globalThis.fetch, now = () => new Da
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
-      if (request.method === "GET" && url.pathname === "/api/v1/health") {
+      const apiOffset = url.pathname.indexOf("/api/v1/");
+      const path = apiOffset >= 0 ? url.pathname.slice(apiOffset) : url.pathname;
+      if (request.method === "GET" && path === "/api/v1/health") {
         return json({ ok: true, service: "mynah-gateway", apiVersion: 1 });
       }
-      if (request.method === "POST" && url.pathname === "/api/v1/device/session/refresh") {
+      if (request.method === "POST" && path === "/api/v1/device/session/refresh") {
         return refreshSession(fetchImpl, env, request);
       }
 
@@ -338,7 +340,7 @@ export function createGateway({ fetchImpl = globalThis.fetch, now = () => new Da
 
       if (
         request.method === "GET" &&
-        (url.pathname === "/api/v1/device/home" || url.pathname === "/api/v1/device/daily")
+        (path === "/api/v1/device/home" || path === "/api/v1/device/daily")
       ) {
         return json(
           await homePayload(
@@ -352,7 +354,7 @@ export function createGateway({ fetchImpl = globalThis.fetch, now = () => new Da
         );
       }
 
-      if (request.method === "POST" && url.pathname === "/api/v1/device/actions") {
+      if (request.method === "POST" && path === "/api/v1/device/actions") {
         let body;
         try {
           body = await request.json();

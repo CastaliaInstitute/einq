@@ -11,9 +11,11 @@ constexpr char kNamespace[] = "einqcfg";
 constexpr char kConfigKey[] = "config";
 constexpr int kSchemaVersion = 1;
 constexpr size_t kMaximumRooms = 12;
+constexpr char kCastaliaGateway[] =
+    "https://pilmscrodlitdrygabvo.supabase.co/functions/v1/mynah-gateway";
 
 constexpr char kDefaultConfig[] =
-    R"json({"schemaVersion":1,"deviceName":"Mynah eInq","board":"x3","profile":"parent","ageBand":"child","individual":"dcmcshan","individualRepo":"CastaliaInstitute/castalia-dcmcshan","settingsPath":"settings/faces.json","gatewayUrl":"https://mynah.castalia.institute","calendarId":"ca7a560e76044c59bbb72a70b98a21a774b99c2f5195eb7357ecd1a1cdf74344@group.calendar.google.com","features":{"calendar":true,"astrology":true,"fortune":true,"cards":true},"rooms":[],"roomMinimumLead":5})json";
+    R"json({"schemaVersion":1,"deviceName":"Mynah eInq","board":"x3","profile":"parent","ageBand":"child","individual":"dcmcshan","individualRepo":"CastaliaInstitute/castalia-dcmcshan","settingsPath":"settings/faces.json","gatewayUrl":"https://pilmscrodlitdrygabvo.supabase.co/functions/v1/mynah-gateway","calendarId":"ca7a560e76044c59bbb72a70b98a21a774b99c2f5195eb7357ecd1a1cdf74344@group.calendar.google.com","features":{"calendar":true,"astrology":true,"fortune":true,"cards":true},"rooms":[],"roomMinimumLead":5})json";
 
 bool isOneOf(const char* value, const char* first, const char* second) {
   return value != nullptr && (std::strcmp(value, first) == 0 || std::strcmp(value, second) == 0);
@@ -84,7 +86,9 @@ bool normalize(const char* json, size_t length, std::string& output, std::string
   canonical["individual"] = input["individual"] | "dcmcshan";
   canonical["individualRepo"] = input["individualRepo"] | "CastaliaInstitute/castalia-dcmcshan";
   canonical["settingsPath"] = input["settingsPath"] | "settings/faces.json";
-  canonical["gatewayUrl"] = input["gatewayUrl"] | "https://mynah.castalia.institute";
+  const char* gateway = input["gatewayUrl"] | kCastaliaGateway;
+  canonical["gatewayUrl"] =
+      std::strcmp(gateway, "https://mynah.castalia.institute") == 0 ? kCastaliaGateway : gateway;
   const char* calendarId = input["calendarId"] | "";
   if (std::strlen(calendarId) > 192) {
     error = "calendarId must be at most 192 characters";
