@@ -9,3 +9,4 @@ __pycache__/
 .pio/
 .vscode/
 device-backups/
+supabase/.temp/
