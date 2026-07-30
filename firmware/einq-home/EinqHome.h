@@ -16,6 +16,31 @@ struct EinqHomeReading {
   bool valid = false;
 };
 
+struct EinqHomeAttribution {
+  char title[64] {};
+  char summary[192] {};
+  char byline[64] {};
+  char source[64] {};
+  char assetUrl[192] {};
+  char sha256[65] {};
+  bool valid = false;
+};
+
+struct EinqHomeTask {
+  char title[64] {};
+  char due[32] {};
+  bool completed = false;
+  bool valid = false;
+};
+
+struct EinqHomeLibrary {
+  char catalogUrl[192] {};
+  char revision[65] {};
+  unsigned int bookCount = 0;
+  unsigned int changedCount = 0;
+  bool valid = false;
+};
+
 struct EinqHomeWeather {
   char condition[48] {};
   char temperature[24] {};
@@ -64,6 +89,8 @@ struct EinqHomePermissions {
 };
 
 struct EinqHomePayload {
+  char schema[40] = "castalia.device.daily.v1";
+  char date[16] {};
   char generatedAt[32] {};
   char profile[16] = "parent";
   EinqHomeEvent nextEvent {};
@@ -75,6 +102,13 @@ struct EinqHomePayload {
   size_t familyCount = 0;
   EinqHomeReading fortune {};
   EinqHomeCard card {};
+  EinqHomeAttribution news {};
+  EinqHomeAttribution art {};
+  EinqHomeAttribution quote {};
+  EinqHomeReading mindfulness {};
+  EinqHomeTask tasks[6] {};
+  size_t taskCount = 0;
+  EinqHomeLibrary library {};
   EinqHomeSpotify spotify {};
   EinqHomeLights lights {};
   EinqHomePermissions permissions {};

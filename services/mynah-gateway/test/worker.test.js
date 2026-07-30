@@ -70,7 +70,18 @@ test("home payload aggregates content and HA state while redacting kid calendar 
         synastryWeather: { title: "Soft aspects", summary: "Make room for repair." },
         family: [{ name: "Camille", status: "Needs a quiet evening." }],
         fortune: { title: "Lantern", summary: "Carry light." },
-        card: { title: "Threshold", summary: "What changes?", domain: "place" }
+        card: { title: "Threshold", summary: "What changes?", domain: "place" },
+        news: { title: "Institute opens", summary: "A new seminar begins.", source: "news.castalia.institute" },
+        artOfTheDay: { title: "Water Lilies", artist: "Claude Monet", image: "https://castalia.example/art.bmp" },
+        quoteOfTheDay: { text: "Know thyself.", author: "Delphi" },
+        mindfulness: { title: "Three breaths", summary: "Notice each exhale." },
+        tasks: [{ title: "Return a library book", due: "17:00", completed: false }],
+        library: {
+          catalogUrl: "https://castalia.example/device/library/catalog",
+          revision: "abc123",
+          bookCount: 12,
+          changedCount: 2
+        }
       });
     }
     if (url.includes("/api/calendars/")) {
@@ -109,8 +120,40 @@ test("home payload aggregates content and HA state while redacting kid calendar 
   assert.equal(body.spotify.track, "An Ending");
   assert.equal(body.lights.on, true);
   assert.equal(body.lights.brightness, 50);
+  assert.equal(body.schema, "castalia.device.daily.v1");
+  assert.equal(body.date, "2026-07-28");
+  assert.equal(body.news.title, "Institute opens");
+  assert.equal(body.art.title, "Water Lilies");
+  assert.equal(body.quote.author, "Delphi");
+  assert.equal(body.mindfulness.title, "Three breaths");
+  assert.equal(body.today.tasks[0].title, "Return a library book");
+  assert.equal(body.library.bookCount, 12);
   assert.equal(body.permissions.administration, false);
   assert.ok(calls.some((call) => call.url.includes("room=Kitchen")));
+});
+
+test("daily endpoint returns the same authenticated bundle contract", async () => {
+  const dailyEnv = {
+    ...env,
+    DEVICE_SESSIONS: JSON.stringify({
+      secret: { profile: "parent", permissions: {}, rooms: {} }
+    })
+  };
+  const gateway = createGateway({
+    fetchImpl: async (input) => {
+      if (String(input).startsWith("https://castalia.example")) {
+        return response({ quote: { text: "Begin.", author: "Castalia" } });
+      }
+      throw new Error(`unexpected ${input}`);
+    },
+    now: () => new Date("2026-07-29T06:00:00Z")
+  });
+  const result = await gateway.fetch(request("/api/v1/device/daily"), dailyEnv);
+  const body = await result.json();
+  assert.equal(result.status, 200);
+  assert.equal(body.schema, "castalia.device.daily.v1");
+  assert.equal(body.date, "2026-07-29");
+  assert.equal(body.quote.text, "Begin.");
 });
 
 test("configured calendar IDs resolve only through the household allow-list", async () => {

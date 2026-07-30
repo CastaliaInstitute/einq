@@ -97,6 +97,28 @@ async function contentFor(fetchImpl, env, session, room) {
   }
 }
 
+async function newsFor(fetchImpl, env, session) {
+  if (!env.CASTALIA_NEWS_URL) return null;
+  const url = new URL(env.CASTALIA_NEWS_URL);
+  url.searchParams.set("limit", "1");
+  if (session.ageBand) url.searchParams.set("ageBand", session.ageBand);
+  const headers = { accept: "application/json" };
+  if (env.CASTALIA_SERVICE_TOKEN) headers.authorization = `Bearer ${env.CASTALIA_SERVICE_TOKEN}`;
+  try {
+    const result = await fetchJson(fetchImpl, url, { headers });
+    const item = Array.isArray(result) ? result[0] : result.items?.[0] || result.article || result;
+    if (!item || typeof item !== "object") return null;
+    return {
+      title: item.title || "",
+      summary: item.summary || item.description || "",
+      byline: item.byline || item.author || "",
+      source: item.source || "news.castalia.institute"
+    };
+  } catch {
+    return null;
+  }
+}
+
 function calendarEntity(session, requestedCalendar) {
   const calendars = session.calendars || {};
   if (requestedCalendar) return calendars[requestedCalendar] || null;
@@ -195,17 +217,29 @@ function permissionsFor(session) {
 async function homePayload(fetchImpl, env, session, roomName, requestedCalendar, now) {
   const room = roomConfig(session, roomName);
   const permissions = permissionsFor(session);
-  const [content, event, weather, spotify, lights] = await Promise.all([
+  const [content, news, event, weather, spotify, lights] = await Promise.all([
     contentFor(fetchImpl, env, session, room),
+    newsFor(fetchImpl, env, session),
     nextEvent(fetchImpl, env, session, requestedCalendar, now),
     weatherState(fetchImpl, env, session),
     spotifyState(fetchImpl, env, room),
     lightState(fetchImpl, env, room)
   ]);
+  const castaliaEvent = content.calendar?.events?.[0] || content.today?.nextEvent || null;
+  const tasks = Array.isArray(content.tasks)
+    ? content.tasks
+    : Array.isArray(content.calendar?.tasks)
+      ? content.calendar.tasks
+      : [];
   return {
+    schema: "castalia.device.daily.v1",
+    date: now.toISOString().slice(0, 10),
     generatedAt: now.toISOString(),
     profile: session.profile === "kid" ? "kid" : "parent",
-    today: { nextEvent: event },
+    today: {
+      nextEvent: permissions.calendar ? castaliaEvent || event : null,
+      tasks: permissions.calendar ? tasks.slice(0, 6) : []
+    },
     weather,
     day: { aphorism: permissions.astrology ? content.day?.aphorism || content.aphorism || null : null },
     selfWeather: permissions.astrology ? content.selfWeather || content.astrology || null : null,
@@ -213,6 +247,13 @@ async function homePayload(fetchImpl, env, session, roomName, requestedCalendar,
     family: permissions.astrology && Array.isArray(content.family) ? content.family.slice(0, 6) : [],
     fortune: permissions.fortune ? content.fortune || null : null,
     card: permissions.cards ? content.card || null : null,
+    news: content.news || news,
+    art: content.art || content.artOfTheDay || null,
+    quote: content.quote || content.quoteOfTheDay || null,
+    mindfulness: content.mindfulness || null,
+    library: content.library || null,
+    settings: content.settings || null,
+    ota: content.ota || null,
     spotify,
     lights,
     permissions
@@ -295,7 +336,10 @@ export function createGateway({ fetchImpl = globalThis.fetch, now = () => new Da
       const session = await authenticate(request, env, fetchImpl);
       if (!session) return json({ error: "unauthorized" }, 401);
 
-      if (request.method === "GET" && url.pathname === "/api/v1/device/home") {
+      if (
+        request.method === "GET" &&
+        (url.pathname === "/api/v1/device/home" || url.pathname === "/api/v1/device/daily")
+      ) {
         return json(
           await homePayload(
             fetchImpl,

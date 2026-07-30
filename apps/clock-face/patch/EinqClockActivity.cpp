@@ -203,6 +203,18 @@ const char* faceLabel(EinqClockActivity::Face face) {
       return "Today";
     case EinqClockActivity::Face::Calendar:
       return "Calendar";
+    case EinqClockActivity::Face::Tasks:
+      return "Tasks";
+    case EinqClockActivity::Face::News:
+      return "Castalia News";
+    case EinqClockActivity::Face::Art:
+      return "Art of the Day";
+    case EinqClockActivity::Face::Quote:
+      return "Quote of the Day";
+    case EinqClockActivity::Face::Mindfulness:
+      return "Mindfulness";
+    case EinqClockActivity::Face::Library:
+      return "Library";
     case EinqClockActivity::Face::SelfWeather:
       return "Self Weather";
     case EinqClockActivity::Face::Synastry:
@@ -409,6 +421,18 @@ bool EinqClockActivity::faceAvailable(Face candidate) const {
       return true;
     case Face::Calendar:
       return home.valid && home.permissions.calendar && home.nextEvent.valid;
+    case Face::Tasks:
+      return home.valid && home.permissions.calendar && home.taskCount > 0;
+    case Face::News:
+      return home.valid && home.news.valid;
+    case Face::Art:
+      return home.valid && home.art.valid;
+    case Face::Quote:
+      return home.valid && home.quote.valid;
+    case Face::Mindfulness:
+      return home.valid && home.mindfulness.valid;
+    case Face::Library:
+      return home.valid && home.library.valid;
     case Face::SelfWeather:
       return home.valid && home.permissions.astrology && home.selfWeather.valid;
     case Face::Synastry:
@@ -428,7 +452,7 @@ bool EinqClockActivity::faceAvailable(Face candidate) const {
 }
 
 void EinqClockActivity::moveFace(int direction) {
-  constexpr int faceCount = 9;
+  constexpr int faceCount = 15;
   int candidate = static_cast<int>(face);
   for (int attempt = 0; attempt < faceCount; attempt++) {
     candidate = (candidate + direction + faceCount) % faceCount;
@@ -497,6 +521,31 @@ void EinqClockActivity::drawHomeFace() {
         snprintf(status, sizeof(status), "Next at %.5s", home.nextEvent.start + 11);
       }
       break;
+    case Face::News:
+      title = home.news.title;
+      summary = home.news.summary;
+      snprintf(status, sizeof(status), "%s", home.news.source);
+      break;
+    case Face::Art:
+      title = home.art.title;
+      summary = home.art.summary;
+      snprintf(status, sizeof(status), "%s", home.art.byline);
+      break;
+    case Face::Quote:
+      title = home.quote.title;
+      summary = home.quote.summary;
+      snprintf(status, sizeof(status), "%s", home.quote.byline);
+      break;
+    case Face::Mindfulness:
+      title = home.mindfulness.title;
+      summary = home.mindfulness.summary;
+      break;
+    case Face::Library:
+      title = "Your EPUB library";
+      snprintf(status, sizeof(status), "%u books  %u changed",
+               home.library.bookCount, home.library.changedCount);
+      summary = home.library.changedCount > 0 ? "New books are ready to sync to SD." : "Library is up to date.";
+      break;
     case Face::SelfWeather:
       title = home.selfWeather.title;
       summary = home.selfWeather.summary;
@@ -543,7 +592,16 @@ void EinqClockActivity::drawHomeFace() {
                  strcmp(home.profile, "kid") == 0 ? "Kid" : nullptr);
 
   int y = contentTop;
-  if (face == Face::Family && !awaitingDailySync) {
+  if (face == Face::Tasks && !awaitingDailySync) {
+    for (size_t i = 0; i < home.taskCount && i < 6; i++) {
+      if (!home.tasks[i].valid || home.tasks[i].completed) continue;
+      char taskLine[72];
+      snprintf(taskLine, sizeof(taskLine), "%s %s", home.tasks[i].due[0] == '\0' ? "-" : home.tasks[i].due,
+               home.tasks[i].title);
+      y = drawWrappedCentered(renderer, smallFont, y, taskLine, 2);
+      y += 8;
+    }
+  } else if (face == Face::Family && !awaitingDailySync) {
     for (size_t i = 0; i < home.familyCount && i < 6; i++) {
       if (!home.family[i].valid) continue;
       renderer.drawCenteredText(bodyFont, y, home.family[i].name, true);
@@ -635,6 +693,34 @@ void EinqClockActivity::publishSnapshot(const struct tm* localTime) {
       case Face::Calendar:
         copySnapshotField(snap.line1, sizeof(snap.line1), home.nextEvent.title);
         copySnapshotField(snap.line2, sizeof(snap.line2), home.nextEvent.start);
+        break;
+      case Face::Tasks:
+        if (home.taskCount > 0) {
+          copySnapshotField(snap.line1, sizeof(snap.line1), home.tasks[0].title);
+          copySnapshotField(snap.line2, sizeof(snap.line2), home.tasks[0].due);
+        }
+        break;
+      case Face::News:
+        copySnapshotField(snap.line1, sizeof(snap.line1), home.news.title);
+        copySnapshotField(snap.line2, sizeof(snap.line2), home.news.summary);
+        copySnapshotField(snap.line3, sizeof(snap.line3), home.news.source);
+        break;
+      case Face::Art:
+        copySnapshotField(snap.line1, sizeof(snap.line1), home.art.title);
+        copySnapshotField(snap.line2, sizeof(snap.line2), home.art.byline);
+        break;
+      case Face::Quote:
+        copySnapshotField(snap.line1, sizeof(snap.line1), home.quote.summary);
+        copySnapshotField(snap.line2, sizeof(snap.line2), home.quote.byline);
+        break;
+      case Face::Mindfulness:
+        copySnapshotField(snap.line1, sizeof(snap.line1), home.mindfulness.title);
+        copySnapshotField(snap.line2, sizeof(snap.line2), home.mindfulness.summary);
+        break;
+      case Face::Library:
+        copySnapshotField(snap.line1, sizeof(snap.line1), "EPUB library");
+        snprintf(snap.line2, sizeof(snap.line2), "%u books", home.library.bookCount);
+        snprintf(snap.line3, sizeof(snap.line3), "%u changed", home.library.changedCount);
         break;
       case Face::SelfWeather:
         copySnapshotField(snap.line1, sizeof(snap.line1), home.selfWeather.title);

@@ -16,7 +16,7 @@ namespace {
 
 constexpr char kCachePath[] = "/.einq/home.json";
 constexpr char kSessionPath[] = "/.einq/session.json";
-constexpr size_t kMaximumPayloadBytes = 12288;
+constexpr size_t kMaximumPayloadBytes = 16384;
 
 void copyField(char* destination, size_t length, const char* source) {
   if (destination == nullptr || length == 0) {
@@ -40,6 +40,27 @@ bool parseReading(JsonObjectConst object, EinqHomeReading& output) {
   return output.valid;
 }
 
+const char* firstText(JsonObjectConst object, const char* first, const char* second,
+                      const char* third = nullptr) {
+  const char* value = object[first] | "";
+  if (value[0] != '\0') return value;
+  value = object[second] | "";
+  if (value[0] != '\0' || third == nullptr) return value;
+  return object[third] | "";
+}
+
+bool parseAttribution(JsonObjectConst object, EinqHomeAttribution& output) {
+  if (object.isNull()) return false;
+  copyField(output.title, sizeof(output.title), object["title"] | "");
+  copyField(output.summary, sizeof(output.summary), firstText(object, "summary", "text"));
+  copyField(output.byline, sizeof(output.byline), firstText(object, "byline", "artist", "author"));
+  copyField(output.source, sizeof(output.source), object["source"] | "");
+  copyField(output.assetUrl, sizeof(output.assetUrl), firstText(object, "assetUrl", "image"));
+  copyField(output.sha256, sizeof(output.sha256), object["sha256"] | "");
+  output.valid = output.title[0] != '\0' || output.summary[0] != '\0';
+  return output.valid;
+}
+
 bool parsePayload(const char* json, size_t length, EinqHomePayload& output) {
   if (json == nullptr || length == 0 || length > kMaximumPayloadBytes) {
     return false;
@@ -51,6 +72,8 @@ bool parsePayload(const char* json, size_t length, EinqHomePayload& output) {
   }
 
   output = {};
+  copyField(output.schema, sizeof(output.schema), document["schema"] | "castalia.device.daily.v1");
+  copyField(output.date, sizeof(output.date), document["date"] | "");
   copyField(output.generatedAt, sizeof(output.generatedAt), document["generatedAt"] | "");
   copyField(output.profile, sizeof(output.profile), document["profile"] | "parent");
 
@@ -86,6 +109,30 @@ bool parsePayload(const char* json, size_t length, EinqHomePayload& output) {
     if (next.valid) output.familyCount++;
   }
   parseReading(document["fortune"].as<JsonObjectConst>(), output.fortune);
+  parseAttribution(document["news"].as<JsonObjectConst>(), output.news);
+  parseAttribution(document["art"].as<JsonObjectConst>(), output.art);
+  parseAttribution(document["quote"].as<JsonObjectConst>(), output.quote);
+  parseReading(document["mindfulness"].as<JsonObjectConst>(), output.mindfulness);
+
+  const JsonArrayConst tasks = document["today"]["tasks"].as<JsonArrayConst>();
+  for (const JsonObjectConst task : tasks) {
+    if (output.taskCount >= 6) break;
+    EinqHomeTask& next = output.tasks[output.taskCount];
+    copyField(next.title, sizeof(next.title), task["title"] | "");
+    copyField(next.due, sizeof(next.due), task["due"] | "");
+    next.completed = task["completed"] | false;
+    next.valid = next.title[0] != '\0';
+    if (next.valid) output.taskCount++;
+  }
+
+  const JsonObjectConst library = document["library"].as<JsonObjectConst>();
+  if (!library.isNull()) {
+    copyField(output.library.catalogUrl, sizeof(output.library.catalogUrl), library["catalogUrl"] | "");
+    copyField(output.library.revision, sizeof(output.library.revision), library["revision"] | "");
+    output.library.bookCount = library["bookCount"] | 0U;
+    output.library.changedCount = library["changedCount"] | 0U;
+    output.library.valid = output.library.catalogUrl[0] != '\0' || output.library.bookCount > 0;
+  }
 
   const JsonObjectConst card = document["card"].as<JsonObjectConst>();
   if (!card.isNull()) {
@@ -125,7 +172,9 @@ bool parsePayload(const char* json, size_t length, EinqHomePayload& output) {
 
   output.valid = output.nextEvent.valid || output.weather.valid || output.dayAphorism.valid ||
                  output.selfWeather.valid || output.synastryWeather.valid || output.familyCount > 0 ||
-                 output.fortune.valid || output.card.valid || output.spotify.connected || output.lights.available;
+                 output.fortune.valid || output.card.valid || output.news.valid || output.art.valid ||
+                 output.quote.valid || output.mindfulness.valid || output.taskCount > 0 ||
+                 output.library.valid || output.spotify.connected || output.lights.available;
   return output.valid;
 }
 
@@ -225,7 +274,7 @@ bool fetchAndCache(const char* room, EinqHomePayload& out) {
   if (gateway.empty()) {
     return false;
   }
-  std::string url = gateway + "/api/v1/device/home";
+  std::string url = gateway + "/api/v1/device/daily";
   bool hasQuery = false;
   if (room != nullptr && room[0] != '\0') {
     url += "?room=" + encodeQuery(room);

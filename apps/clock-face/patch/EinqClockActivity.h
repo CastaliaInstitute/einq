@@ -12,6 +12,12 @@ class EinqClockActivity final : public Activity {
   enum class Face : unsigned char {
     Day,
     Calendar,
+    Tasks,
+    News,
+    Art,
+    Quote,
+    Mindfulness,
+    Library,
     SelfWeather,
     Synastry,
     Family,

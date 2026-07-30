@@ -3,6 +3,7 @@
 This edge service implements the two APIs consumed by Mynah X3/X4:
 
 - `GET /api/v1/health`
+- `GET /api/v1/device/daily?room=Kitchen`
 - `GET /api/v1/device/home?room=Kitchen`
 - `POST /api/v1/device/actions`
 
@@ -10,12 +11,19 @@ It combines Castalia calendar/astrology/fortune/eINQ content with room-specific
 Home Assistant state. Tuya lights are exposed to Mynah through their Home
 Assistant `light.*` entities; Spotify uses a `media_player.*` entity.
 
+`device/daily` is the canonical synchronization endpoint; `device/home`
+remains a compatibility alias. Its `castalia.device.daily.v1` response may
+contain Castalia CalDAV-derived events and tasks, news, art, quote and
+mindfulness selections, the user's EPUB catalog revision, personal face
+settings, and OTA metadata. The device caches this bounded bundle on SD.
+
 ## Configuration
 
 Set ordinary variables:
 
 - `HOME_ASSISTANT_URL`
 - `CASTALIA_CONTENT_URL`
+- `CASTALIA_NEWS_URL` (optional when news is already in Castalia content)
 
 Set secrets:
 
