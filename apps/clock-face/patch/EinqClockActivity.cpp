@@ -919,6 +919,7 @@ void EinqClockActivity::onEnter() {
   face = Face::Day;
   actionPending = false;
   authSessionAvailable = EinqAuth::hasSession();
+  automaticPairingAttempted = false;
   codexSelectedIndex = 0;
   stopWifi();
   wifiBootstrapStarted = false;
@@ -959,6 +960,12 @@ void EinqClockActivity::openCastaliaPairing() {
 }
 
 void EinqClockActivity::loop() {
+  if (!authSessionAvailable && !automaticPairingAttempted) {
+    automaticPairingAttempted = true;
+    openCastaliaPairing();
+    return;
+  }
+
   if (mappedInput.wasAnyPressed()) {
     LOG_INF("EINQ_BTN", "press role=%s front=%d adc1=%d adc2=%d power=%d",
             pressedRole(mappedInput, false), mappedInput.getPressedFrontButton(),

@@ -46,6 +46,7 @@ class EinqClockActivity final : public Activity {
   bool actionPending = false;
   bool bleStarted = false;
   bool authSessionAvailable = false;
+  bool automaticPairingAttempted = false;
   size_t codexSelectedIndex = 0;
 
   void drawClockFace(const struct tm& localTime);
