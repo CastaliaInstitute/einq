@@ -216,6 +216,14 @@ char codexStatusMark(const char* status) {
   return 'I';
 }
 
+const char* codexOkHint(const EinqHomeCodex& codex, size_t selectedIndex) {
+  if (selectedIndex >= codex.taskCount) return "OK: continue";
+  const char* status = codex.tasks[selectedIndex].status;
+  if (strcmp(status, "waiting-approval") == 0) return "OK: approve   hold: pin";
+  if (strcmp(status, "running") == 0) return "OK: interrupt   hold: pin";
+  return "OK: continue   hold: pin";
+}
+
 const char* faceLabel(EinqClockActivity::Face face) {
   switch (face) {
     case EinqClockActivity::Face::Day:
@@ -517,7 +525,7 @@ void EinqClockActivity::performFaceAction(const char* requestedAction) {
     taskId = task.id;
     if (strcmp(task.status, "waiting-approval") == 0) action = "codex.approve";
     else if (strcmp(task.status, "running") == 0) action = "codex.interrupt";
-    else action = "codex.open";
+    else action = "codex.continue";
   }
   if (action == nullptr) {
     return;
@@ -705,7 +713,9 @@ void EinqClockActivity::drawHomeFace() {
              (face == Face::Lights && home.permissions.lightControl) ||
              (face == Face::Codex && home.permissions.codexControl)) {
     renderer.drawCenteredText(smallFont, pageHeight - 112,
-                              face == Face::Codex ? "OK: act   hold OK: pin" : "Press OK to toggle", true);
+                              face == Face::Codex ? codexOkHint(home.codex, codexSelectedIndex)
+                                                  : "Press OK to toggle",
+                              true);
   }
 
   const bool actionable = (face == Face::Spotify && home.permissions.spotifyControl) ||

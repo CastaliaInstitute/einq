@@ -285,6 +285,7 @@ async function performAction(fetchImpl, env, session, action, roomName, taskId) 
   }
   const codexActions = {
     "codex.open": "open",
+    "codex.continue": "open",
     "codex.interrupt": "interrupt",
     "codex.approve": "approve",
     "codex.pin-toggle": "pin-toggle"

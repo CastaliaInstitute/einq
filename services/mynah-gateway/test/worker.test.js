@@ -323,6 +323,27 @@ test("Codex actions select a task before forwarding its context action", async (
   assert.equal(calls[0].options.headers["X-Astrolabe-Codex"], "sync-v1");
 });
 
+test("Codex continue resumes the selected thread through the companion open action", async () => {
+  const calls = [];
+  const gateway = createGateway({
+    fetchImpl: async (input, options) => {
+      calls.push({ url: String(input), options });
+      return response({ ok: true });
+    }
+  });
+  const result = await gateway.fetch(
+    request("/api/v1/device/actions", {
+      method: "POST",
+      body: JSON.stringify({ action: "codex.continue", taskId: "thread-2" })
+    }),
+    { ...env, CODEX_SERVICE_URL: "http://astrolabe.local" }
+  );
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(JSON.parse(calls[0].options.body), { action: "select", task_id: "thread-2" });
+  assert.deepEqual(JSON.parse(calls[1].options.body), { action: "open" });
+});
+
 test("missing or ungranted device actions are rejected", async () => {
   const restricted = {
     ...env,
