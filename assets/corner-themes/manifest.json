@@ -2,28 +2,28 @@
   "max_size": 176,
   "themes": [
     {
-      "id": "art-nouveau-vine",
-      "source": "assets/generated/corners/art-nouveau-vine-bottom-left.png",
+      "id": "sumi-e-bamboo-blossom",
+      "source": "assets/corner-themes/sumi-e/all-season.png",
       "seasons": ["all"]
     },
     {
-      "id": "winter-holly-pine",
-      "source": "assets/corner-themes/winter.png",
+      "id": "sumi-e-winter-pine-plum",
+      "source": "assets/corner-themes/sumi-e/winter.png",
       "seasons": ["winter"]
     },
     {
-      "id": "spring-iris-fern",
-      "source": "assets/corner-themes/spring.png",
+      "id": "sumi-e-spring-bamboo-cherry",
+      "source": "assets/corner-themes/sumi-e/spring.png",
       "seasons": ["spring"]
     },
     {
-      "id": "summer-grapevine",
-      "source": "assets/corner-themes/summer.png",
+      "id": "sumi-e-summer-lotus",
+      "source": "assets/corner-themes/sumi-e/summer.png",
       "seasons": ["summer"]
     },
     {
-      "id": "autumn-oak-acorn",
-      "source": "assets/corner-themes/autumn.png",
+      "id": "sumi-e-autumn-maple",
+      "source": "assets/corner-themes/sumi-e/autumn.png",
       "seasons": ["autumn"]
     }
   ]
