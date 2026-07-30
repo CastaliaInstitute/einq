@@ -197,6 +197,25 @@ int drawWrappedCentered(const GfxRenderer& renderer, int font, int y, const char
   return y;
 }
 
+const char* codexStatusLabel(const char* status) {
+  if (status == nullptr) return "idle";
+  if (strcmp(status, "running") == 0) return "thinking";
+  if (strcmp(status, "done") == 0) return "complete";
+  if (strcmp(status, "waiting-input") == 0) return "needs input";
+  if (strcmp(status, "waiting-approval") == 0) return "needs approval";
+  return status;
+}
+
+char codexStatusMark(const char* status) {
+  if (status == nullptr) return 'I';
+  if (strcmp(status, "running") == 0) return 'T';
+  if (strcmp(status, "done") == 0) return 'C';
+  if (strcmp(status, "waiting-input") == 0) return '?';
+  if (strcmp(status, "waiting-approval") == 0) return '!';
+  if (strcmp(status, "error") == 0) return 'X';
+  return 'I';
+}
+
 const char* faceLabel(EinqClockActivity::Face face) {
   switch (face) {
     case EinqClockActivity::Face::Day:
@@ -574,7 +593,7 @@ void EinqClockActivity::drawHomeFace() {
         title = task.title;
         snprintf(status, sizeof(status), "%s%s%s  %s  %u/%u",
                  task.model, task.model[0] && task.speed[0] ? " / " : "", task.speed,
-                 task.status, static_cast<unsigned>(codexSelectedIndex + 1),
+                 codexStatusLabel(task.status), static_cast<unsigned>(codexSelectedIndex + 1),
                  static_cast<unsigned>(home.codex.taskCount));
         static char codexSummary[96];
         if (task.totalTokens || task.rateTokensPerMinute) {
@@ -651,6 +670,20 @@ void EinqClockActivity::drawHomeFace() {
       y = drawWrappedCentered(renderer, smallFont, y, home.family[i].status, 2);
       y += 12;
     }
+  } else if (face == Face::Codex && !awaitingDailySync) {
+    char overview[48] = "Agents  ";
+    size_t used = strlen(overview);
+    for (size_t i = 0; i < home.codex.taskCount && used + 4 < sizeof(overview); i++) {
+      overview[used++] = i == codexSelectedIndex ? '[' : ' ';
+      overview[used++] = codexStatusMark(home.codex.tasks[i].status);
+      overview[used++] = i == codexSelectedIndex ? ']' : ' ';
+    }
+    overview[used] = '\0';
+    renderer.drawCenteredText(smallFont, y, overview, true);
+    y += renderer.getLineHeight(smallFont) + 16;
+    y = drawWrappedCentered(renderer, titleFont, y, title, 3);
+    y += 12;
+    y = drawWrappedCentered(renderer, bodyFont, y, summary, 3);
   } else {
     y = drawWrappedCentered(renderer, titleFont, y, title, 3);
     y += 12;
@@ -672,7 +705,7 @@ void EinqClockActivity::drawHomeFace() {
              (face == Face::Lights && home.permissions.lightControl) ||
              (face == Face::Codex && home.permissions.codexControl)) {
     renderer.drawCenteredText(smallFont, pageHeight - 112,
-                              face == Face::Codex ? "OK acts on selected task" : "Press OK to toggle", true);
+                              face == Face::Codex ? "OK: act   hold OK: pin" : "Press OK to toggle", true);
   }
 
   const bool actionable = (face == Face::Spotify && home.permissions.spotifyControl) ||
@@ -970,6 +1003,17 @@ void EinqClockActivity::loop() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (face == Face::Day && !authSessionAvailable) {
       openCastaliaPairing();
+    } else if (face == Face::Codex && mappedInput.getHeldTime() >= SIDE_BUTTON_LONG_PRESS_MS &&
+               home.permissions.codexControl && codexSelectedIndex < home.codex.taskCount) {
+      actionPending = true;
+      drawFace();
+      if (ensureWifiForSync() &&
+          EinqHome::sendAction("codex.pin-toggle", currentRoom, home.codex.tasks[codexSelectedIndex].id)) {
+        syncHome(true);
+      }
+      stopWifi();
+      actionPending = false;
+      drawFace();
     } else {
       performFaceAction();
     }
