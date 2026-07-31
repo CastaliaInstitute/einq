@@ -9,6 +9,7 @@
 #include <cctype>
 #include <cstring>
 #include <string>
+#include <type_traits>
 
 #include "einq-config/EinqConfigStore.h"
 
@@ -17,6 +18,23 @@ namespace {
 constexpr char kCachePath[] = "/.einq/home.json";
 constexpr char kSessionPath[] = "/.einq/session.json";
 constexpr size_t kMaximumPayloadBytes = 16384;
+
+void copyField(char* destination, size_t length, const char* source);
+
+// EinqHomePayload is several kilobytes. Assigning `out = {}` makes GCC build a
+// value-initialized temporary on Arduino's 16 KiB loopTask stack before copying
+// it, which overflows during startup on X3/X4. Reset the POD fields in place and
+// then restore the handful of non-zero defaults.
+void resetPayload(EinqHomePayload& out) {
+  static_assert(std::is_trivially_copyable_v<EinqHomePayload>);
+  std::memset(&out, 0, sizeof(out));
+  copyField(out.schema, sizeof(out.schema), "castalia.device.daily.v1");
+  copyField(out.profile, sizeof(out.profile), "parent");
+  out.permissions.calendar = true;
+  out.permissions.astrology = true;
+  out.permissions.fortune = true;
+  out.permissions.cards = true;
+}
 
 void copyField(char* destination, size_t length, const char* source) {
   if (destination == nullptr || length == 0) {
@@ -71,7 +89,7 @@ bool parsePayload(const char* json, size_t length, EinqHomePayload& output) {
     return false;
   }
 
-  output = {};
+  resetPayload(output);
   copyField(output.schema, sizeof(output.schema), document["schema"] | "castalia.device.daily.v1");
   copyField(output.date, sizeof(output.date), document["date"] | "");
   copyField(output.generatedAt, sizeof(output.generatedAt), document["generatedAt"] | "");
@@ -285,7 +303,7 @@ namespace EinqHome {
 bool loadCached(EinqHomePayload& out) {
   const String content = Storage.readFile(kCachePath);
   if (content.isEmpty() || !parsePayload(content.c_str(), content.length(), out)) {
-    out = {};
+    resetPayload(out);
     return false;
   }
   applyLocalPolicy(out);
@@ -294,7 +312,7 @@ bool loadCached(EinqHomePayload& out) {
 }
 
 bool fetchAndCache(const char* room, EinqHomePayload& out) {
-  out = {};
+  resetPayload(out);
   if (WiFi.status() != WL_CONNECTED) {
     return false;
   }

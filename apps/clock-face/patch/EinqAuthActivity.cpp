@@ -14,7 +14,8 @@
 namespace {
 constexpr unsigned long kConnectTimeoutMs = 15000;
 constexpr unsigned long kPollIntervalMs = 2500;
-constexpr int kQrSize = 270;
+// Version 11 plus its quiet zone renders at five pixels per module.
+constexpr int kQrSize = 360;
 }
 
 bool EinqAuthActivity::connectWifi() {

@@ -18,10 +18,14 @@ fi
 
 python3 "$ROOT/scripts/generate-setup-assets.py"
 python3 "$ROOT/scripts/generate-corner-art.py"
+if [[ -f "$ROOT/.vendor/cards/editorial/catalog.json" ]]; then
+  python3 "$ROOT/scripts/generate-card-catalog.py"
+fi
 
 mkdir -p "$CP/src/activities/einq" "$CP/src/einq-ble" "$CP/src/einq-schedule" "$CP/src/einq-glyph" "$CP/src/einq-cotd" "$CP/src/einq-ota" "$CP/src/einq-wifi" "$CP/src/einq-config" "$CP/src/einq-room" "$CP/src/einq-home" "$CP/src/einq-auth"
 cp "$PATCH/EinqClockActivity.h" "$PATCH/EinqClockActivity.cpp" "$PATCH/EinqCornerArt.h" "$PATCH/EinqCornerArt.cpp" \
-  "$PATCH/EinqCornerArtData.h" "$PATCH/EinqWifiSetupActivity.h" "$PATCH/EinqWifiSetupActivity.cpp" \
+  "$PATCH/EinqCornerArtData.h" "$PATCH/EinqCardCatalogData.h" \
+  "$PATCH/EinqWifiSetupActivity.h" "$PATCH/EinqWifiSetupActivity.cpp" \
   "$PATCH/EinqAuthActivity.h" "$PATCH/EinqAuthActivity.cpp" "$CP/src/activities/einq/"
 cp "$ROOT/firmware/einq-ble/"*.h "$ROOT/firmware/einq-ble/"*.cpp "$CP/src/einq-ble/"
 cp "$ROOT/firmware/einq-schedule/"*.h "$ROOT/firmware/einq-schedule/"*.cpp "$CP/src/einq-schedule/"
@@ -35,6 +39,74 @@ cp "$ROOT/firmware/einq-room/EinqRoomResolver.h" "$ROOT/firmware/einq-room/EinqR
   "$ROOT/firmware/einq-room/EinqRoomScanner.h" "$ROOT/firmware/einq-room/EinqRoomScanner.cpp" "$CP/src/einq-room/"
 cp "$ROOT/firmware/einq-home/"*.h "$ROOT/firmware/einq-home/"*.cpp "$CP/src/einq-home/"
 cp "$ROOT/firmware/einq-auth/"*.h "$ROOT/firmware/einq-auth/"*.cpp "$CP/src/einq-auth/"
+
+# Select QR versions by actual encoder capacity and preserve the mandatory
+# four-module white quiet zone. This is needed for Castalia's 314-byte pairing
+# URL, which does not fit the old helper's hard-coded version 10.
+QR_CPP="$CP/src/util/QrUtils.cpp"
+if ! grep -q 'kQuietModules' "$QR_CPP"; then
+  python3 - "$QR_CPP" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+old = '''  int version = 4;
+  if (len > 114) version = 10;
+  if (len > 395) version = 20;
+  if (len > 1066) version = 30;
+  if (len > 2110) version = 40;
+
+  // Make sure we have a large enough buffer on the heap to avoid blowing the stack
+  uint32_t bufferSize = qrcode_getBufferSize(version);
+  auto qrcodeBytes = std::make_unique<uint8_t[]>(bufferSize);
+
+  QRCode qrcode;
+  // Initialize the QR code. We use ECC_LOW for max capacity.
+  int8_t res = qrcode_initText(&qrcode, qrcodeBytes.get(), version, ECC_LOW, payload);
+'''
+new = '''  static constexpr uint16_t kByteCapacity[] = {
+      0, 17, 32, 53, 78, 106, 134, 154, 192, 230, 271, 321, 367, 425,
+      458, 520, 586, 644, 718, 792, 858, 929, 1003, 1091, 1171, 1273,
+      1367, 1465, 1528, 1628, 1732, 1840, 1952, 2068, 2188, 2303, 2431,
+      2563, 2699, 2809, 2953};
+  constexpr int kMaxVersion = 40;
+  int version = 1;
+  while (version < kMaxVersion && len > kByteCapacity[version]) ++version;
+  uint32_t bufferSize = qrcode_getBufferSize(version);
+  auto qrcodeBytes = std::make_unique<uint8_t[]>(bufferSize);
+
+  QRCode qrcode;
+  int8_t res = qrcode_initText(&qrcode, qrcodeBytes.get(), version, ECC_LOW, payload);
+'''
+if old not in text:
+    raise SystemExit('QrUtils.cpp: version-selection block not found')
+text = text.replace(old, new, 1)
+old = '''    // Determine the optimal pixel size.
+    const int maxDim = std::min(bounds.width, bounds.height);
+
+    int px = maxDim / qrcode.size;
+    if (px < 1) px = 1;
+
+    // Calculate centering X and Y
+    const int qrDisplaySize = qrcode.size * px;
+    const int xOff = bounds.x + (bounds.width - qrDisplaySize) / 2;
+    const int yOff = bounds.y + (bounds.height - qrDisplaySize) / 2;
+'''
+new = '''    constexpr int kQuietModules = 4;
+    const int maxDim = std::min(bounds.width, bounds.height);
+    int px = maxDim / (qrcode.size + 2 * kQuietModules);
+    if (px < 1) px = 1;
+
+    const int totalDisplaySize = (qrcode.size + 2 * kQuietModules) * px;
+    const int xOff = bounds.x + (bounds.width - totalDisplaySize) / 2 + kQuietModules * px;
+    const int yOff = bounds.y + (bounds.height - totalDisplaySize) / 2 + kQuietModules * px;
+'''
+if old not in text:
+    raise SystemExit('QrUtils.cpp: sizing block not found')
+path.write_text(text.replace(old, new, 1))
+print('patched QrUtils.cpp (capacity + quiet zone)')
+PY
+fi
 
 PIO_INI="$CP/platformio.ini"
 if ! grep -q 'NimBLE-Arduino' "$PIO_INI"; then

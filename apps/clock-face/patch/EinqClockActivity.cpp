@@ -10,9 +10,11 @@
 #include <esp_sntp.h>
 
 #include <ctime>
+#include <memory>
 #include <string>
 
 #include "components/UITheme.h"
+#include "EinqCardCatalogData.h"
 #include "EinqCornerArt.h"
 #include "einq-ble/EinqBle.h"
 #include "einq-auth/EinqAuth.h"
@@ -289,9 +291,14 @@ bool EinqClockActivity::ensureWifiForSync() {
   if (WiFi.status() == WL_CONNECTED) {
     return true;
   }
+  // ESP32-C3 has no PSRAM-backed WiFi buffer option. Reclaim NimBLE's internal
+  // DRAM before starting WiFi; otherwise the driver can allocate only one of
+  // its four required RX buffers and crashes while unwinding initialization.
+  suspendBleForWifi();
   if (wifiSsid.empty()) {
     EinqWifiStore::Credentials primary {};
     if (!EinqWifiStore::loadPrimary(primary)) {
+      resumeBleAfterWifi();
       return false;
     }
     wifiSsid = primary.ssid;
@@ -305,7 +312,27 @@ bool EinqClockActivity::ensureWifiForSync() {
   while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_CONNECT_TIMEOUT_MS) {
     delay(200);
   }
-  return WiFi.status() == WL_CONNECTED;
+  const bool connected = WiFi.status() == WL_CONNECTED;
+  if (!connected) {
+    stopWifi();
+    resumeBleAfterWifi();
+  }
+  return connected;
+}
+
+void EinqClockActivity::suspendBleForWifi() {
+  if (!bleStarted) return;
+  EinqRoomScanner::suspend();
+  EinqBle::shutdown();
+  bleStarted = false;
+  delay(100);
+}
+
+void EinqClockActivity::resumeBleAfterWifi() {
+  if (bleStarted) return;
+  EinqBle::begin();
+  EinqRoomScanner::begin();
+  bleStarted = true;
 }
 
 void EinqClockActivity::syncCotdForDate(const struct tm& localTime) {
@@ -324,6 +351,7 @@ void EinqClockActivity::syncCotdForDate(const struct tm& localTime) {
   }
   if (online) {
     stopWifi();
+    resumeBleAfterWifi();
   }
 
   if (next.valid) {
@@ -348,6 +376,7 @@ void EinqClockActivity::maybeMidnightOta(const struct tm& localTime) {
   char url[sizeof(EinqOta::kDefaultFirmwareUrl) + 8];
   if (EinqOta::fetchManifest(version, sizeof(version), url, sizeof(url), nullptr) != EinqOta::Result::Ok) {
     stopWifi();
+    resumeBleAfterWifi();
     return;
   }
 
@@ -355,6 +384,7 @@ void EinqClockActivity::maybeMidnightOta(const struct tm& localTime) {
 
   if (!EinqOta::isNewerThanRunning(version)) {
     stopWifi();
+    resumeBleAfterWifi();
     return;
   }
 
@@ -373,6 +403,10 @@ void EinqClockActivity::maybeMidnightOta(const struct tm& localTime) {
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
 
   EinqOta::installFromUrl(url);
+  // Successful installs reboot. If installation returns, restore normal BLE
+  // control rather than leaving the device radio-silent.
+  stopWifi();
+  resumeBleAfterWifi();
 }
 
 void EinqClockActivity::drawClockFace(const struct tm& localTime) {
@@ -473,7 +507,7 @@ bool EinqClockActivity::faceAvailable(Face candidate) const {
     case Face::Fortune:
       return home.valid && home.permissions.fortune && home.fortune.valid;
     case Face::Card:
-      return home.valid && home.permissions.cards && home.card.valid;
+      return home.permissions.cards && EinqCardCatalogData::kCardCount > 0;
     case Face::Spotify:
       return home.valid && home.spotify.connected;
     case Face::Lights:
@@ -497,12 +531,16 @@ void EinqClockActivity::moveFace(int direction) {
 }
 
 void EinqClockActivity::syncHome(bool allowNetwork) {
-  EinqHomePayload next {};
-  const bool loaded = allowNetwork ? EinqHome::sync(currentRoom, next) : EinqHome::loadCached(next);
+  // EinqHomePayload includes the complete daily Castalia snapshot and is too
+  // large for Arduino's 16 KiB loopTask stack. Keep the temporary copy on the
+  // heap; placing it here caused immediate stack-protection panics on X3/X4.
+  auto next = std::make_unique<EinqHomePayload>();
+  const bool loaded =
+      allowNetwork ? EinqHome::sync(currentRoom, *next) : EinqHome::loadCached(*next);
   if (!loaded) {
     return;
   }
-  home = next;
+  home = *next;
   if (codexSelectedIndex >= home.codex.taskCount) {
     codexSelectedIndex = home.codex.selectedIndex;
   }
@@ -537,6 +575,7 @@ void EinqClockActivity::performFaceAction(const char* requestedAction) {
     syncHome(true);
   }
   stopWifi();
+  resumeBleAfterWifi();
   actionPending = false;
   drawFace();
 }
@@ -545,6 +584,14 @@ void EinqClockActivity::moveCodexTask(int direction) {
   if (!home.codex.taskCount) return;
   const int count = static_cast<int>(home.codex.taskCount);
   codexSelectedIndex = static_cast<size_t>((static_cast<int>(codexSelectedIndex) + direction + count) % count);
+  drawFace();
+}
+
+void EinqClockActivity::moveCard(int direction) {
+  const int count = static_cast<int>(EinqCardCatalogData::kCardCount);
+  if (count == 0) return;
+  cardSelectedIndex =
+      static_cast<size_t>((static_cast<int>(cardSelectedIndex) + direction + count) % count);
   drawFace();
 }
 
@@ -628,10 +675,15 @@ void EinqClockActivity::drawHomeFace() {
       summary = home.fortune.summary;
       break;
     case Face::Card:
-      title = home.card.title;
-      summary = home.card.summary;
-      if (home.card.domain[0] != '\0') {
-        snprintf(status, sizeof(status), "Domain: %s", home.card.domain);
+      if (cardSelectedIndex >= EinqCardCatalogData::kCardCount) cardSelectedIndex = 0;
+      {
+        const auto& card = EinqCardCatalogData::kCards[cardSelectedIndex];
+        title = card.slug;
+        summary = card.token;
+        snprintf(status, sizeof(status), "%s  %u / %u",
+                 EinqCardCatalogData::kDomains[card.domain],
+                 static_cast<unsigned>(cardSelectedIndex + 1),
+                 static_cast<unsigned>(EinqCardCatalogData::kCardCount));
       }
       break;
     case Face::Spotify:
@@ -649,7 +701,7 @@ void EinqClockActivity::drawHomeFace() {
       break;
   }
 
-  const bool awaitingDailySync = !home.valid;
+  const bool awaitingDailySync = !home.valid && face != Face::Card;
   if (awaitingDailySync) {
     title = faceLabel(face);
     summary = "Available after the daily mindfulness sync";
@@ -730,6 +782,8 @@ void EinqClockActivity::drawHomeFace() {
     GUI.drawSideButtonHints(renderer, "- hold", "hold +");
   } else if (face == Face::Codex) {
     GUI.drawSideButtonHints(renderer, "task - hold", "hold task +");
+  } else if (face == Face::Card) {
+    GUI.drawSideButtonHints(renderer, "card - / hold exit", "hold exit / card +");
   } else {
     GUI.drawSideButtonHints(renderer, "Prev", "Next");
   }
@@ -839,9 +893,16 @@ void EinqClockActivity::publishSnapshot(const struct tm* localTime) {
         copySnapshotField(snap.line2, sizeof(snap.line2), home.fortune.summary);
         break;
       case Face::Card:
-        copySnapshotField(snap.line1, sizeof(snap.line1), home.card.title);
-        copySnapshotField(snap.line2, sizeof(snap.line2), home.card.summary);
-        copySnapshotField(snap.glyph, sizeof(snap.glyph), home.card.domain);
+        if (cardSelectedIndex < EinqCardCatalogData::kCardCount) {
+          const auto& card = EinqCardCatalogData::kCards[cardSelectedIndex];
+          copySnapshotField(snap.line1, sizeof(snap.line1), card.slug);
+          copySnapshotField(snap.line2, sizeof(snap.line2), card.token);
+          copySnapshotField(snap.glyph, sizeof(snap.glyph),
+                            EinqCardCatalogData::kDomains[card.domain]);
+          snprintf(snap.line3, sizeof(snap.line3), "%u/%u",
+                   static_cast<unsigned>(cardSelectedIndex + 1),
+                   static_cast<unsigned>(EinqCardCatalogData::kCardCount));
+        }
         break;
       case Face::Spotify:
         copySnapshotField(snap.line1, sizeof(snap.line1), home.spotify.track);
@@ -893,7 +954,10 @@ void EinqClockActivity::drawFace() {
     return;
   }
 
-  EinqBle::setAdvertisedCard(face == Face::Card && home.card.valid ? home.card.title : nullptr);
+  EinqBle::setAdvertisedCard(
+      face == Face::Card && cardSelectedIndex < EinqCardCatalogData::kCardCount
+          ? EinqCardCatalogData::kCards[cardSelectedIndex].slug
+          : nullptr);
   if (face == Face::Day) {
     drawClockFace(localTime);
   } else {
@@ -938,7 +1002,10 @@ void EinqClockActivity::onEnter() {
 }
 
 void EinqClockActivity::openWifiSetup() {
+  suspendBleForWifi();
   startActivityForResult(std::make_unique<EinqWifiSetupActivity>(renderer, mappedInput), [this](const ActivityResult&) {
+    stopWifi();
+    resumeBleAfterWifi();
     wifiBootstrapStarted = false;
     ntpSyncAttempted = false;
     redrawAfterNtp = false;
@@ -948,6 +1015,7 @@ void EinqClockActivity::openWifiSetup() {
 }
 
 void EinqClockActivity::openCastaliaPairing() {
+  suspendBleForWifi();
   startActivityForResult(std::make_unique<EinqAuthActivity>(renderer, mappedInput), [this](const ActivityResult&) {
     authSessionAvailable = EinqAuth::hasSession();
     if (authSessionAvailable && ensureWifiForSync()) {
@@ -955,6 +1023,7 @@ void EinqClockActivity::openCastaliaPairing() {
       syncHome(true);
       stopWifi();
     }
+    resumeBleAfterWifi();
     drawFace();
   });
 }
@@ -980,7 +1049,9 @@ void EinqClockActivity::loop() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::NavPrevious)) {
     if (mappedInput.getHeldTime() >= SIDE_BUTTON_LONG_PRESS_MS) {
-      if (face == Face::Spotify && home.permissions.spotifyControl) {
+      if (face == Face::Card) {
+        moveFace(-1);
+      } else if (face == Face::Spotify && home.permissions.spotifyControl) {
         performFaceAction("spotify.previous");
       } else if (face == Face::Lights && home.permissions.lightControl) {
         performFaceAction("lights.dimmer");
@@ -990,14 +1061,17 @@ void EinqClockActivity::loop() {
         openCastaliaPairing();
       }
     } else {
-      moveFace(-1);
+      if (face == Face::Card) moveCard(-1);
+      else moveFace(-1);
     }
     return;
   }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::NavNext)) {
     if (mappedInput.getHeldTime() >= SIDE_BUTTON_LONG_PRESS_MS) {
-      if (face == Face::Spotify && home.permissions.spotifyControl) {
+      if (face == Face::Card) {
+        moveFace(1);
+      } else if (face == Face::Spotify && home.permissions.spotifyControl) {
         performFaceAction("spotify.next");
       } else if (face == Face::Lights && home.permissions.lightControl) {
         performFaceAction("lights.brighter");
@@ -1007,7 +1081,8 @@ void EinqClockActivity::loop() {
         openWifiSetup();
       }
     } else {
-      moveFace(1);
+      if (face == Face::Card) moveCard(1);
+      else moveFace(1);
     }
     return;
   }
@@ -1029,6 +1104,7 @@ void EinqClockActivity::loop() {
         syncHome(true);
       }
       stopWifi();
+      resumeBleAfterWifi();
       actionPending = false;
       drawFace();
     } else {
@@ -1068,6 +1144,7 @@ void EinqClockActivity::loop() {
     if (authSessionAvailable && ensureWifiForSync()) {
       syncHome(true);
       stopWifi();
+      resumeBleAfterWifi();
     }
     drawFace();
   }
@@ -1097,6 +1174,7 @@ void EinqClockActivity::loop() {
       }
       syncHome(true);
       stopWifi();
+      resumeBleAfterWifi();
     }
   } else if (!validWallClock(localTime) && !ntpSyncAttempted) {
     ntpSyncAttempted = true;
@@ -1104,6 +1182,7 @@ void EinqClockActivity::loop() {
       syncTimeWithNTP();
       redrawAfterNtp = true;
       stopWifi();
+      resumeBleAfterWifi();
     }
   }
 

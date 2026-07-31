@@ -2,28 +2,28 @@
   "max_size": 176,
   "themes": [
     {
-      "id": "sumi-e-bamboo-blossom",
-      "source": "assets/corner-themes/sumi-e/all-season.png",
+      "id": "emojinq-leaf",
+      "source": "assets/corner-themes/emojinq/leaf.png",
       "seasons": ["all"]
     },
     {
-      "id": "sumi-e-winter-pine-plum",
-      "source": "assets/corner-themes/sumi-e/winter.png",
+      "id": "emojinq-winter-leaf",
+      "source": "assets/corner-themes/emojinq/leaf.png",
       "seasons": ["winter"]
     },
     {
-      "id": "sumi-e-spring-bamboo-cherry",
-      "source": "assets/corner-themes/sumi-e/spring.png",
+      "id": "emojinq-spring-leaf",
+      "source": "assets/corner-themes/emojinq/leaf.png",
       "seasons": ["spring"]
     },
     {
-      "id": "sumi-e-summer-lotus",
-      "source": "assets/corner-themes/sumi-e/summer.png",
+      "id": "emojinq-summer-leaf",
+      "source": "assets/corner-themes/emojinq/leaf.png",
       "seasons": ["summer"]
     },
     {
-      "id": "sumi-e-autumn-maple",
-      "source": "assets/corner-themes/sumi-e/autumn.png",
+      "id": "emojinq-autumn-leaf",
+      "source": "assets/corner-themes/emojinq/leaf.png",
       "seasons": ["autumn"]
     }
   ]

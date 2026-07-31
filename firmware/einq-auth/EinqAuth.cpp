@@ -1,10 +1,11 @@
 #include "EinqAuth.h"
 
 #include <ArduinoJson.h>
-#include <HTTPClient.h>
 #include <HalStorage.h>
-#include <NetworkClientSecure.h>
+#include <Logging.h>
+#include <SecureHttpClient.h>
 #include <WiFi.h>
+#include <esp_heap_caps.h>
 
 #include <cctype>
 #include <ctime>
@@ -17,7 +18,9 @@ namespace {
 
 constexpr char kPairingBase[] =
     "https://pilmscrodlitdrygabvo.supabase.co/functions/v1/mynah-castalia-link";
-constexpr char kSignInBase[] = "https://castalia.institute/auth/signin/?provider=google&redirect=";
+// Google OAuth is optional in Castalia's Supabase project. Use the regular
+// sign-in page so its enabled email/password flow can complete the handoff.
+constexpr char kSignInBase[] = "https://castalia.institute/auth/signin/?redirect=";
 constexpr char kSessionPath[] = "/.einq/session.json";
 constexpr uint64_t kRefreshLeadMs = 5 * 60 * 1000;
 
@@ -88,26 +91,52 @@ void appendCastaliaIdentity(std::string& redirectPath) {
 }
 
 bool requestJson(const char* url, bool post, const char* body, JsonDocument& output) {
-  NetworkClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-  if (!http.begin(client, url)) return false;
+  LOG_INF("EINQ_AUTH", "request begin free=%u largest=%u",
+          static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));
+  // The C3 has no PSRAM and cannot afford Arduino HTTPClient's mbedTLS peak
+  // allocation here. FreeInk's wolfSSL client uses the same low-memory TLS
+  // path as book/catalog downloads (including its compact X25519 key share).
+  freeink::SecureHttpClient http;
+  http.setInsecure();
   http.setTimeout(20000);
+  http.setUserAgent("eInq-Castalia/1");
+  if (!http.begin(url)) {
+    LOG_ERR("EINQ_AUTH", "HTTP begin failed");
+    return false;
+  }
   http.addHeader("Accept", "application/json");
   int status;
   if (post) {
     http.addHeader("Content-Type", "application/json");
-    status = http.POST(body == nullptr ? "{}" : body);
+    status = http.POST(std::string(body == nullptr ? "{}" : body));
   } else {
     status = http.GET();
   }
+  LOG_INF("EINQ_AUTH", "HTTP status=%d free=%u largest=%u", status,
+          static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)),
+          static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL)));
   if (status < 200 || status >= 300) {
+    LOG_ERR("EINQ_AUTH", "request failed: status=%d complete=%d", status,
+            http.responseComplete());
     http.end();
     return false;
   }
-  const String response = http.getString();
+  const std::string response = http.getString();
+  const bool complete = http.responseComplete();
   http.end();
-  return !deserializeJson(output, response);
+  if (!complete) {
+    LOG_ERR("EINQ_AUTH", "incomplete response len=%u", static_cast<unsigned>(response.size()));
+    return false;
+  }
+  const DeserializationError parseError = deserializeJson(output, response);
+  if (parseError) {
+    LOG_ERR("EINQ_AUTH", "JSON failed len=%u: %s", static_cast<unsigned>(response.size()),
+            parseError.c_str());
+    return false;
+  }
+  LOG_INF("EINQ_AUTH", "JSON ok len=%u", static_cast<unsigned>(response.size()));
+  return true;
 }
 
 }  // namespace

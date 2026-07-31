@@ -48,6 +48,7 @@ class EinqClockActivity final : public Activity {
   bool authSessionAvailable = false;
   bool automaticPairingAttempted = false;
   size_t codexSelectedIndex = 0;
+  size_t cardSelectedIndex = 0;
 
   void drawClockFace(const struct tm& localTime);
   void drawHomeFace();
@@ -61,8 +62,11 @@ class EinqClockActivity final : public Activity {
   void moveFace(int direction);
   void performFaceAction(const char* requestedAction = nullptr);
   void moveCodexTask(int direction);
+  void moveCard(int direction);
   void openWifiSetup();
   void openCastaliaPairing();
+  void suspendBleForWifi();
+  void resumeBleAfterWifi();
   bool ensureWifiForSync();
 
  public:
