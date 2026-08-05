@@ -313,6 +313,7 @@ test("Castalia Supabase Gazetteer astrology overlays the generic content fallbac
       secret: {
         profile: "parent",
         individual: "dcmcshan",
+        timezone: "America/New_York",
         permissions: { astrology: true },
         rooms: {}
       }
@@ -321,7 +322,7 @@ test("Castalia Supabase Gazetteer astrology overlays the generic content fallbac
   };
   const calls = [];
   const gateway = createGateway({
-    now: () => new Date("2026-08-05T18:00:00Z"),
+    now: () => new Date("2026-08-05T02:00:00Z"),
     fetchImpl: async (input, options = {}) => {
       const url = String(input);
       calls.push({ url, options });
@@ -346,9 +347,11 @@ test("Castalia Supabase Gazetteer astrology overlays the generic content fallbac
   const body = await result.json();
   assert.equal(result.status, 200);
   assert.equal(body.selfWeather.title, "Sun square Sun");
+  assert.equal(body.date, "2026-08-04");
   assert.match(body.astrologyMeta.source, /ephemeris\.castalia\.institute/);
   const databaseCall = calls.find((call) => call.url.includes("castalia_device_daily_editions"));
   assert.equal(databaseCall.options.headers.authorization, "Bearer service-role-key");
+  assert.equal(new URL(databaseCall.url).searchParams.get("issue_date"), "eq.2026-08-04");
 });
 
 test("configured calendar IDs resolve only through the household allow-list", async () => {

@@ -20,6 +20,29 @@ function parseSessions(env) {
   return parseObject(env.DEVICE_SESSIONS);
 }
 
+function timeZoneFor(env, session) {
+  const username = String(session.individual || session.username || "");
+  const configured = parseObject(env.DEVICE_TIME_ZONES_JSON)[username];
+  const candidate = String(session.timezone || configured || env.DEFAULT_TIME_ZONE || "UTC");
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: candidate }).format(0);
+    return candidate;
+  } catch {
+    return "UTC";
+  }
+}
+
+function issueDateFor(now, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 async function authenticate(request, env, fetchImpl) {
   const header = request.headers.get("authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
@@ -125,7 +148,7 @@ function familyRepositoryFor(env, session) {
 
 async function familyGazetteerFor(fetchImpl, env, session, now) {
   const username = String(session.individual || session.username || "");
-  const date = now.toISOString().slice(0, 10);
+  const date = issueDateFor(now, timeZoneFor(env, session));
   if (username && env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
     const base = env.SUPABASE_URL.replace(/\/+$/, "");
     const query = new URL(`${base}/rest/v1/castalia_device_daily_editions`);
@@ -393,7 +416,7 @@ async function homePayload(fetchImpl, env, session, roomName, requestedCalendar,
   const gazetteer = gazetteerFor(content);
   return {
     schema: "castalia.device.daily.v1",
-    date: now.toISOString().slice(0, 10),
+    date: issueDateFor(now, timeZoneFor(env, session)),
     generatedAt: now.toISOString(),
     profile: session.profile === "kid" ? "kid" : "parent",
     today: {
