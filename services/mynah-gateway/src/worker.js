@@ -471,7 +471,6 @@ function payloadSegment(payload, segment) {
     if (payload.today?.nextEvent || payload.today?.tasks?.length) core.today = payload.today;
     if (payload.weather?.condition || payload.weather?.temperature) core.weather = payload.weather;
     if (payload.day?.aphorism) core.day = payload.day;
-    if (payload.family?.length) core.family = payload.family;
     for (const key of ["fortune", "card", "news", "mindfulness", "codex", "settings", "ota"]) {
       if (payload[key] && (typeof payload[key] !== "object" || Object.keys(payload[key]).length)) {
         core[key] = payload[key];
@@ -492,7 +491,8 @@ function payloadSegment(payload, segment) {
     return {
       ...metadata,
       astrologyMeta: payload.astrologyMeta,
-      synastryWeather: payload.synastryWeather
+      synastryWeather: payload.synastryWeather,
+      family: payload.family
     };
   }
   if (segment === "scriptorium") {

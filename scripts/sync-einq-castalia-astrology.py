@@ -87,7 +87,11 @@ def astrology_segments(row: dict[str, Any], profile: str = "parent") -> dict[str
     }
     segments = {
         "astrology-self": {**common, "selfWeather": payload.get("selfWeather")},
-        "astrology-synastry": {**common, "synastryWeather": payload.get("synastryWeather")},
+        "astrology-synastry": {
+            **common,
+            "synastryWeather": payload.get("synastryWeather"),
+            "family": payload.get("family") if isinstance(payload.get("family"), list) else [],
+        },
     }
     for name, value in segments.items():
         reading_key = "selfWeather" if name == "astrology-self" else "synastryWeather"

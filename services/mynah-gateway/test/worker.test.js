@@ -263,6 +263,7 @@ test("long Gazetteer excerpts are split into TLS-safe device segments", async ()
       return response({
         selfWeather: { title: "Virgo Moon", summary: longText.repeat(2) },
         synastryWeather: { title: "Balanced household", summary: longText.repeat(2) },
+        family: [{ name: "Camille", status: "Venus conjunction Sun" }],
         season: "summer",
         theme: { message: "Long light." },
         content: {
@@ -298,8 +299,10 @@ test("long Gazetteer excerpts are split into TLS-safe device segments", async ()
   }
   assert.equal(segments.core.selfWeather, undefined);
   assert.equal(segments.core.synastryWeather, undefined);
+  assert.equal(segments.core.family, undefined);
   assert.equal(segments["astrology-self"].selfWeather.title, "Virgo Moon");
   assert.equal(segments["astrology-synastry"].synastryWeather.title, "Balanced household");
+  assert.equal(segments["astrology-synastry"].family[0].name, "Camille");
   assert.equal(segments["daily-1"].gazetteer.book.title, "Book");
   assert.equal(segments["daily-2"].quote.title, "Quote of the Day");
   assert.equal(segments["daily-3"].gazetteer.faculty.title, "Attention");

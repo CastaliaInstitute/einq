@@ -158,13 +158,17 @@ bool parsePayload(const char* json, size_t length, EinqHomePayload& output, bool
   }
   parseDetailedReading(document["synastryWeather"].as<JsonObjectConst>(), output.synastryWeather);
   const JsonArrayConst family = document["family"].as<JsonArrayConst>();
-  for (const JsonObjectConst member : family) {
-    if (output.familyCount >= 6) break;
-    EinqHomeFamilyMember& next = output.family[output.familyCount];
-    copyField(next.name, sizeof(next.name), member["name"] | "");
-    copyField(next.status, sizeof(next.status), member["status"] | "");
-    next.valid = next.name[0] != '\0' && next.status[0] != '\0';
-    if (next.valid) output.familyCount++;
+  if (!family.isNull()) {
+    std::memset(output.family, 0, sizeof(output.family));
+    output.familyCount = 0;
+    for (const JsonObjectConst member : family) {
+      if (output.familyCount >= 6) break;
+      EinqHomeFamilyMember& next = output.family[output.familyCount];
+      copyField(next.name, sizeof(next.name), member["name"] | "");
+      copyField(next.status, sizeof(next.status), member["status"] | "");
+      next.valid = next.name[0] != '\0' && next.status[0] != '\0';
+      if (next.valid) output.familyCount++;
+    }
   }
   parseReading(document["fortune"].as<JsonObjectConst>(), output.fortune);
   parseAttribution(document["news"].as<JsonObjectConst>(), output.news);

@@ -26,6 +26,10 @@ class CastaliaAstrologySyncTests(unittest.TestCase):
             "payload": {
                 "selfWeather": {"title": "Sun square Sun", "summary": "Self detail", "valid": True},
                 "synastryWeather": {"title": "Household", "summary": "Pair detail", "valid": True},
+                "family": [
+                    {"name": "Daniel", "status": "Mars conjunction Mars"},
+                    {"name": "Camille", "status": "Venus conjunction Sun"},
+                ],
                 "astrologyMeta": {
                     "generatedAt": "2026-08-05T04:00:00+00:00",
                     "sourceDigestSha256": "a" * 64,
@@ -43,7 +47,9 @@ class CastaliaAstrologySyncTests(unittest.TestCase):
         self.assertEqual(set(segments), {"astrology-self", "astrology-synastry"})
         self.assertEqual(json.loads(segments["astrology-self"])["date"], "2026-08-05")
         self.assertEqual(json.loads(segments["astrology-self"])["selfWeather"]["title"], "Sun square Sun")
-        self.assertEqual(json.loads(segments["astrology-synastry"])["astrologyMeta"]["feedCheck"]["status"], "passed")
+        synastry = json.loads(segments["astrology-synastry"])
+        self.assertEqual(synastry["astrologyMeta"]["feedCheck"]["status"], "passed")
+        self.assertEqual([member["name"] for member in synastry["family"]], ["Daniel", "Camille"])
 
     def test_rejects_unverified_edition(self) -> None:
         row = {
