@@ -72,6 +72,8 @@ def astrology_segments(row: dict[str, Any], profile: str = "parent") -> dict[str
     if (
         not re.fullmatch(r"[0-9a-f]{64}", digest)
         or feed.get("status") != "passed"
+        or feed.get("published_ephemeris_mode") != "SWIEPH"
+        or not re.fullmatch(r"[0-9a-f]{64}", str(feed.get("published_engine_data_sha256") or ""))
         or meta.get("ephemerisMode") != "SWIEPH"
         or not str(meta.get("engineDataRelease") or "").strip()
     ):

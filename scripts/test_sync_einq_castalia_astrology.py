@@ -31,7 +31,11 @@ class CastaliaAstrologySyncTests(unittest.TestCase):
                     "sourceDigestSha256": "a" * 64,
                     "ephemerisMode": "SWIEPH",
                     "engineDataRelease": "aloistr/swisseph@test-release",
-                    "feedCheck": {"status": "passed"},
+                    "feedCheck": {
+                        "status": "passed",
+                        "published_ephemeris_mode": "SWIEPH",
+                        "published_engine_data_sha256": "b" * 64,
+                    },
                 },
             },
         }
@@ -54,7 +58,11 @@ class CastaliaAstrologySyncTests(unittest.TestCase):
     def test_rejects_unpinned_or_non_swieph_edition(self) -> None:
         meta = {
             "sourceDigestSha256": "a" * 64,
-            "feedCheck": {"status": "passed"},
+            "feedCheck": {
+                "status": "passed",
+                "published_ephemeris_mode": "SWIEPH",
+                "published_engine_data_sha256": "b" * 64,
+            },
             "ephemerisMode": "MOSEPH",
             "engineDataRelease": "aloistr/swisseph@test-release",
         }
