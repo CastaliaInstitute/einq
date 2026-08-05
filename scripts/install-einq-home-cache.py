@@ -129,6 +129,21 @@ def reload_with_reconnect(
         print(result.decode())
 
 
+def reset_with_reconnect(
+    path: str,
+    *,
+    open_wait: float,
+    opener: Callable[[str], serial.Serial] = open_without_reset,
+) -> None:
+    """Reset into a clean heap so startup can activate freshly saved caches."""
+    with open_when_available(path, opener=opener) as port:
+        time.sleep(max(0, open_wait))
+        port.dtr = False
+        port.rts = True
+        time.sleep(0.1)
+        port.rts = False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", required=True)

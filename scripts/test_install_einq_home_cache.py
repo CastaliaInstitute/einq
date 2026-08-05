@@ -18,6 +18,8 @@ SPEC.loader.exec_module(installer)
 class FakePort:
     def __init__(self, name: str):
         self.name = name
+        self.dtr = None
+        self.rts = None
 
     def __enter__(self):
         return self
@@ -63,6 +65,17 @@ class ReconnectTests(unittest.TestCase):
             )
 
         self.assertEqual([item[0] for item in attempts], ["first", "second"])
+
+    @mock.patch.object(installer.time, "sleep", return_value=None)
+    def test_clean_heap_reset_deasserts_rts(self, _sleep) -> None:
+        port = FakePort("ready")
+        installer.reset_with_reconnect(
+            "/dev/example",
+            open_wait=0,
+            opener=lambda _path: port,
+        )
+        self.assertFalse(port.dtr)
+        self.assertFalse(port.rts)
 
 
 if __name__ == "__main__":
