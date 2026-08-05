@@ -136,7 +136,10 @@ test("home payload aggregates content and HA state while redacting kid calendar 
   assert.equal(body.library.bookCount, 12);
   assert.equal(body.codex.tasks[0].id, "thread-1");
   assert.equal(body.permissions.administration, false);
-  assert.ok(calls.some((call) => call.url.includes("room=Kitchen")));
+  assert.ok(calls.some((call) => {
+    if (!call.url.startsWith("https://castalia.example")) return false;
+    return JSON.parse(call.options.body).room === "Kitchen";
+  }));
 });
 
 test("daily endpoint returns the same authenticated bundle contract", async () => {
@@ -161,6 +164,192 @@ test("daily endpoint returns the same authenticated bundle contract", async () =
   assert.equal(body.schema, "castalia.device.daily.v1");
   assert.equal(body.date, "2026-07-29");
   assert.equal(body.quote.text, "Begin.");
+});
+
+test("Scriptorium reads the authenticated individual's private EPUB catalog without exposing GitHub credentials", async () => {
+  const calls = [];
+  const scriptoriumEnv = {
+    ...env,
+    GITHUB_LIBRARY_TOKEN: "private-github-token",
+    DEVICE_SESSIONS: JSON.stringify({
+      secret: { individual: "dcmcshan", profile: "parent", permissions: {}, rooms: {} }
+    })
+  };
+  const gateway = createGateway({
+    fetchImpl: async (input, options = {}) => {
+      const url = String(input);
+      calls.push({ url, options });
+      if (url.startsWith("https://api.github.com/repos/CastaliaInstitute/castalia-dcmcshan/")) {
+        return response({
+          schema: "castalia.individual.library.v1",
+          individual: "dcmcshan",
+          repository: "CastaliaInstitute/castalia-dcmcshan",
+          format: "epub",
+          books: [
+            {
+              id: "little-prince",
+              title: "The Little Prince",
+              authors: ["Antoine de Saint-Exupery"],
+              path: "library/books/the-little-prince.epub",
+              sha256: "abc"
+            },
+            { id: "unsafe", title: "Ignore", authors: [], path: "private/notes.txt" }
+          ]
+        });
+      }
+      if (url.startsWith("https://castalia.example")) return response({});
+      throw new Error(`unexpected ${url}`);
+    }
+  });
+  const result = await gateway.fetch(request("/api/v1/device/daily?segment=scriptorium"), scriptoriumEnv);
+  const text = await result.text();
+  const body = JSON.parse(text);
+
+  assert.equal(result.status, 200);
+  assert.ok(Buffer.byteLength(text) < 1700, "Scriptorium must fit the X3 TLS receive window");
+  assert.equal(body.library.repository, "CastaliaInstitute/castalia-dcmcshan");
+  assert.equal(body.library.bookCount, 2);
+  assert.equal(body.library.books.length, 1);
+  assert.equal(body.library.books[0].title, "The Little Prince");
+  const githubCall = calls.find((call) => call.url.startsWith("https://api.github.com/"));
+  assert.equal(githubCall.options.headers.authorization, "Bearer private-github-token");
+  assert.equal(text.includes("private-github-token"), false);
+});
+
+test("Gazetteer daily sections are normalized into device-sized X of the Day entries", async () => {
+  const gateway = createGateway({
+    fetchImpl: async (input) => {
+      if (!String(input).startsWith("https://castalia.example")) throw new Error(`unexpected ${input}`);
+      return response({
+        date: "2026-08-01",
+        season: "summer",
+        theme: { message: "Open through long light today." },
+        content: {
+          book: { title: "Walden", creator: "Henry David Thoreau", why: "Attend closely to place." },
+          quote: { text: "I am rooted, but I flow.", attribution: "Virginia Woolf" },
+          poem: { title: "Song of Myself", creator: "Walt Whitman", excerpt: "I celebrate myself.", note: "Notice the living world." },
+          faculty: { name: "Attention", practice: "Notice one ordinary thing.", astrology_note: "Practice warmth." },
+          history: { title: "Apollo 11 reaches the Moon", date: "1969-07-20", note: "Patient preparation matters." },
+          country: { name: "Japan", capital: "Tokyo", reflection: "Carry careful craft into the day." },
+          art: { title: "The Great Wave", artist: "Katsushika Hokusai", medium: "woodblock print", looking_prompt: "Look for force and craft." },
+          bible: { reference: "Micah 6:8", text: "Do justice, love kindness.", reflection: "Make kindness concrete." }
+        }
+      });
+    },
+    now: () => new Date("2026-08-01T12:00:00Z")
+  });
+  const result = await gateway.fetch(request("/api/v1/device/daily"), env);
+  const body = await result.json();
+  assert.equal(result.status, 200);
+  assert.equal(body.gazetteer.book.title, "Walden");
+  assert.equal(body.gazetteer.poem.byline, "Walt Whitman");
+  assert.equal(body.gazetteer.faculty.title, "Attention");
+  assert.equal(body.gazetteer.history.byline, "1969-07-20");
+  assert.equal(body.gazetteer.country.title, "Japan");
+  assert.equal(body.gazetteer.bible.title, "Micah 6:8");
+  assert.equal(body.art.title, "The Great Wave");
+  assert.equal(body.quote.byline, "Virginia Woolf");
+});
+
+test("long Gazetteer excerpts are split into TLS-safe device segments", async () => {
+  const longText = "A".repeat(400);
+  const segmentEnv = {
+    ...env,
+    DEVICE_SESSIONS: JSON.stringify({ secret: { profile: "parent", permissions: {}, rooms: {} } })
+  };
+  const gateway = createGateway({
+    fetchImpl: async (input) => {
+      if (!String(input).startsWith("https://castalia.example")) throw new Error(`unexpected ${input}`);
+      return response({
+        selfWeather: { title: "Virgo Moon", summary: longText.repeat(2) },
+        synastryWeather: { title: "Balanced household", summary: longText.repeat(2) },
+        season: "summer",
+        theme: { message: "Long light." },
+        content: {
+          book: { title: "Book", why: longText },
+          art: { title: "Art", looking_prompt: longText },
+          quote: { text: longText },
+          poem: { title: "Poem", excerpt: longText },
+          faculty: { name: "Attention", practice: longText },
+          history: { title: "History", note: longText },
+          country: { name: "Country", reflection: longText },
+          bible: { reference: "Verse", text: longText }
+        }
+      });
+    }
+  });
+
+  const segments = {};
+  for (const name of [
+    "core",
+    "astrology-self",
+    "astrology-synastry",
+    "scriptorium",
+    "daily-1",
+    "daily-2",
+    "daily-3",
+    "daily-4"
+  ]) {
+    const result = await gateway.fetch(request(`/api/v1/device/daily?segment=${name}`), segmentEnv);
+    const text = await result.text();
+    assert.equal(result.status, 200);
+    assert.ok(Buffer.byteLength(text) < 1700, `${name} must fit the X3 TLS receive window`);
+    segments[name] = JSON.parse(text);
+  }
+  assert.equal(segments.core.selfWeather, undefined);
+  assert.equal(segments.core.synastryWeather, undefined);
+  assert.equal(segments["astrology-self"].selfWeather.title, "Virgo Moon");
+  assert.equal(segments["astrology-synastry"].synastryWeather.title, "Balanced household");
+  assert.equal(segments["daily-1"].gazetteer.book.title, "Book");
+  assert.equal(segments["daily-2"].quote.title, "Quote of the Day");
+  assert.equal(segments["daily-3"].gazetteer.faculty.title, "Attention");
+  assert.equal(segments["daily-4"].gazetteer.country.title, "Country");
+});
+
+test("private family Gazetteer astrology overlays the generic content fallback", async () => {
+  const familyEnv = {
+    ...env,
+    DEVICE_SESSIONS: JSON.stringify({
+      secret: {
+        profile: "parent",
+        individual: "dcmcshan",
+        familyRepository: "CastaliaInstitute/castalia-family-mcshan",
+        permissions: { astrology: true },
+        rooms: {}
+      }
+    }),
+    FAMILY_RHYTHM_GITHUB_TOKEN: "github-read-token"
+  };
+  const calls = [];
+  const gateway = createGateway({
+    now: () => new Date("2026-08-05T18:00:00Z"),
+    fetchImpl: async (input, options = {}) => {
+      const url = String(input);
+      calls.push({ url, options });
+      if (url.startsWith("https://castalia.example")) {
+        return response({ selfWeather: { title: "Fallback", summary: "Not calculated." } });
+      }
+      if (url.includes("CastaliaInstitute/castalia-family-mcshan/contents/outputs/2026-08-05/daily-content.json")) {
+        return response({
+          selfWeather: { title: "Sun square Sun", summary: "Calculated transit reading." },
+          synastryWeather: { title: "Household synastry", summary: "Calculated pair reading." },
+          astrologyMeta: {
+            source: "ephemeris.castalia.institute · Swiss Ephemeris 2.10.03",
+            effectiveAt: "2026-08-05T18:00:00+00:00"
+          }
+        });
+      }
+      throw new Error(`unexpected ${url}`);
+    }
+  });
+
+  const result = await gateway.fetch(request("/api/v1/device/daily?segment=astrology-self"), familyEnv);
+  const body = await result.json();
+  assert.equal(result.status, 200);
+  assert.equal(body.selfWeather.title, "Sun square Sun");
+  assert.match(body.astrologyMeta.source, /ephemeris\.castalia\.institute/);
+  const githubCall = calls.find((call) => call.url.startsWith("https://api.github.com/"));
+  assert.equal(githubCall.options.headers.authorization, "Bearer github-read-token");
 });
 
 test("configured calendar IDs resolve only through the household allow-list", async () => {
@@ -300,6 +489,37 @@ test("context actions control Spotify tracks and room light brightness", async (
   });
 });
 
+test("eInq select responses ask Al for text without requesting audio", async () => {
+  let call;
+  const gateway = createGateway({
+    fetchImpl: async (input, options) => {
+      call = { url: String(input), options };
+      return response({ transcript: "Tell me more.", reply: "The current is shifting by the reeds." });
+    }
+  });
+  const result = await gateway.fetch(
+    request("/api/v1/device/actions", {
+      method: "POST",
+      body: JSON.stringify({ action: "al.respond", message: "Tell me more.", room: "Kitchen" })
+    }),
+    env
+  );
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(await result.json(), {
+    ok: true,
+    transcript: "Tell me more.",
+    reply: "The current is shifting by the reeds."
+  });
+  assert.equal(call.url, "https://supabase.example/functions/v1/voice-pipeline");
+  assert.deepEqual(JSON.parse(call.options.body), {
+    message: "Tell me more.",
+    face: "alpheus",
+    textOnly: true
+  });
+  assert.equal(call.options.headers["x-alpheus-source"], "einq");
+});
+
 test("Codex actions select a task before forwarding its context action", async () => {
   const calls = [];
   const gateway = createGateway({
@@ -405,6 +625,44 @@ test("Supabase sessions map an authenticated household user to device policy", a
   const result = await gateway.fetch(request("/api/v1/device/home?room=Kitchen"), mapped);
   assert.equal(result.status, 200);
   assert.equal((await result.json()).profile, "parent");
+});
+
+test("authenticated users can use a least-privilege default device policy", async () => {
+  const mapped = {
+    ...env,
+    DEVICE_SESSIONS: "{}",
+    DEVICE_USERS: "{}",
+    DEVICE_DEFAULT_POLICY: JSON.stringify({
+      profile: "parent",
+      individual: "dcmcshan",
+      permissions: { calendar: false, lightControl: false, spotifyControl: false }
+    }),
+    CASTALIA_CONTENT_API_KEY: "daily-key"
+  };
+  let contentRequest;
+  const fetchImpl = async (input, options = {}) => {
+    const url = String(input);
+    if (url.endsWith("/auth/v1/user")) return response({ id: "user-without-explicit-policy" });
+    if (url.startsWith("https://castalia.example")) {
+      contentRequest = options;
+      return response({});
+    }
+    throw new Error(`unexpected ${url}`);
+  };
+  const gateway = createGateway({ fetchImpl });
+  const result = await gateway.fetch(request("/api/v1/device/home"), mapped);
+  assert.equal(result.status, 200);
+  assert.equal((await result.json()).profile, "parent");
+  assert.equal(contentRequest.method, "POST");
+  assert.equal(contentRequest.headers["x-api-key"], "daily-key");
+  assert.equal(contentRequest.headers["x-castalia-username"], "dcmcshan");
+  assert.deepEqual(JSON.parse(contentRequest.body), {
+    username: "dcmcshan",
+    editorial: true,
+    profile: "parent",
+    ageBand: "",
+    room: ""
+  });
 });
 
 test("session refresh exchanges a refresh token without exposing the Supabase key", async () => {

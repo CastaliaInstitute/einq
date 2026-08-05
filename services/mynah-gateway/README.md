@@ -86,9 +86,27 @@ Start from `device-policy.example.json` for the Daniel & Camille household.
 Replace every `replace_with_*` Home Assistant entity before storing the policy
 in `DEVICE_SESSIONS` or `DEVICE_USERS`.
 
-The Castalia content response may provide `day.aphorism`, `selfWeather`,
-`synastryWeather`, and up to six `{name,status}` family entries. Physical
+The Castalia content response may provide `day.aphorism`, detailed
+`selfWeather`, detailed `synastryWeather`, and up to six `{name,status}` family
+entries. Astrology and synastry are delivered in dedicated bounded segments so
+multi-page readings do not exceed the X3 TLS receive window. Physical
 weather comes from the allow-listed Home Assistant `weatherEntity`.
+
+When a device policy supplies `familyRepository` (or
+`FAMILY_RHYTHM_REPO_MAP_JSON` maps its `individual`), the gateway overlays the
+private `outputs/YYYY-MM-DD/daily-content.json` from that family archive. This
+is how Swiss Ephemeris-backed Gazetteer readings replace the generic content
+fallback. `FAMILY_RHYTHM_GITHUB_TOKEN` must be a read-only Contents token; it
+never leaves the gateway.
+
+The `scriptorium` segment reads `library/catalog.json` from the paired
+individual's private repository (for example,
+`CastaliaInstitute/castalia-dcmcshan`). Set `GITHUB_LIBRARY_TOKEN` to a
+least-privilege token with read-only Contents access to those repositories.
+Only catalog entries under `library/books/*.epub` are returned, and the token
+remains gateway-side; it is never sent to the X3/X4. A session may override the
+default repository with `libraryRepository`, but the gateway only accepts
+repositories matching `CastaliaInstitute/castalia-*`.
 
 For QR-paired Mynah sessions, set `DEVICE_USERS` to the same policy objects
 keyed by Supabase user ID. The gateway validates the bearer JWT with Supabase

@@ -7,13 +7,17 @@ function json(value, status = 200) {
   return new Response(JSON.stringify(value), { status, headers: jsonHeaders });
 }
 
-function parseSessions(env) {
+function parseObject(value) {
   try {
-    const sessions = JSON.parse(env.DEVICE_SESSIONS || "{}");
-    return sessions && typeof sessions === "object" ? sessions : {};
+    const parsed = JSON.parse(value || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
   }
+}
+
+function parseSessions(env) {
+  return parseObject(env.DEVICE_SESSIONS);
 }
 
 async function authenticate(request, env, fetchImpl) {
@@ -32,8 +36,9 @@ async function authenticate(request, env, fetchImpl) {
         apikey: env.SUPABASE_ANON_KEY
       }
     });
-    const users = JSON.parse(env.DEVICE_USERS || "{}");
-    return users[user.id] || null;
+    const users = parseObject(env.DEVICE_USERS);
+    const policy = users[user.id] || parseObject(env.DEVICE_DEFAULT_POLICY);
+    return Object.keys(policy).length ? { ...policy, userId: user.id } : null;
   } catch {
     return null;
   }
@@ -85,15 +90,65 @@ async function haService(fetchImpl, env, domain, service, entityIds, data = {}) 
 async function contentFor(fetchImpl, env, session, room) {
   if (!env.CASTALIA_CONTENT_URL) return {};
   const url = new URL(env.CASTALIA_CONTENT_URL);
-  url.searchParams.set("profile", session.profile || "parent");
-  if (session.ageBand) url.searchParams.set("ageBand", session.ageBand);
-  if (room.name) url.searchParams.set("room", room.name);
-  const headers = { accept: "application/json" };
-  if (env.CASTALIA_SERVICE_TOKEN) headers.authorization = `Bearer ${env.CASTALIA_SERVICE_TOKEN}`;
+  const username = session.individual || session.username || "";
+  const headers = { accept: "application/json", "content-type": "application/json" };
+  if (env.CASTALIA_CONTENT_API_KEY) headers["x-api-key"] = env.CASTALIA_CONTENT_API_KEY;
+  else if (env.CASTALIA_SERVICE_TOKEN) headers.authorization = `Bearer ${env.CASTALIA_SERVICE_TOKEN}`;
+  if (username) headers["x-castalia-username"] = username;
   try {
-    return await fetchJson(fetchImpl, url, { headers });
+    return await fetchJson(fetchImpl, url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        username,
+        editorial: true,
+        profile: session.profile || "parent",
+        ageBand: session.ageBand || "",
+        room: room.name || ""
+      })
+    });
   } catch {
     return {};
+  }
+}
+
+function familyRepositoryFor(env, session) {
+  const username = String(session.individual || session.username || "");
+  const mapping = parseObject(env.FAMILY_RHYTHM_REPO_MAP_JSON);
+  const mapped = mapping[username];
+  const repository = String(
+    session.familyRepository ||
+      (typeof mapped === "string" ? mapped : mapped?.repository || mapped?.repo || "")
+  );
+  return /^CastaliaInstitute\/castalia-family-[A-Za-z0-9._-]+$/.test(repository) ? repository : "";
+}
+
+async function familyGazetteerFor(fetchImpl, env, session, now) {
+  const repository = familyRepositoryFor(env, session);
+  const token = env.FAMILY_RHYTHM_GITHUB_TOKEN || env.GITHUB_LIBRARY_TOKEN;
+  if (!repository || !token) return null;
+  const date = now.toISOString().slice(0, 10);
+  const path = `outputs/${date}/daily-content.json`;
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const reference = encodeURIComponent(env.FAMILY_RHYTHM_GITHUB_REF || "main");
+  try {
+    const response = await fetchImpl(
+      `https://api.github.com/repos/${repository}/contents/${encodedPath}?ref=${reference}`,
+      {
+        headers: {
+          accept: "application/vnd.github.raw+json",
+          authorization: `Bearer ${token}`,
+          "user-agent": "Castalia-Mynah-Gazetteer/1"
+        }
+      }
+    );
+    if (!response.ok) return null;
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (contentLength > 128 * 1024) return null;
+    const payload = await response.json();
+    return payload && typeof payload === "object" && !Array.isArray(payload) ? payload : null;
+  } catch {
+    return null;
   }
 }
 
@@ -114,6 +169,62 @@ async function newsFor(fetchImpl, env, session) {
       byline: item.byline || item.author || "",
       source: item.source || "news.castalia.institute"
     };
+  } catch {
+    return null;
+  }
+}
+
+function normalizedScriptorium(catalog, repository, revision = "") {
+  if (!catalog || catalog.schema !== "castalia.individual.library.v1" || !Array.isArray(catalog.books)) {
+    return null;
+  }
+  const books = catalog.books
+    .filter((book) => {
+      const path = typeof book?.path === "string" ? book.path : "";
+      return book && typeof book === "object" && path.startsWith("library/books/") && path.endsWith(".epub");
+    })
+    .slice(0, 8)
+    .map((book) => ({
+      id: String(book.id || "").slice(0, 48),
+      title: String(book.title || "Untitled").slice(0, 72),
+      authors: (Array.isArray(book.authors) ? book.authors : [])
+        .map((author) => String(author))
+        .join(", ")
+        .slice(0, 80),
+      path: String(book.path).slice(0, 128)
+    }));
+  return {
+    schema: catalog.schema,
+    repository,
+    revision: String(revision || catalog.revision || "").replace(/^W\//, "").replaceAll('"', "").slice(0, 48),
+    format: "epub",
+    bookCount: catalog.books.length,
+    changedCount: 0,
+    books
+  };
+}
+
+async function scriptoriumFor(fetchImpl, env, session) {
+  const individual = String(session.individual || session.username || "");
+  const repository = String(
+    session.libraryRepository || (individual ? `CastaliaInstitute/castalia-${individual}` : "")
+  );
+  // Repository selection is policy-derived, never supplied by the device.
+  if (!/^CastaliaInstitute\/castalia-[A-Za-z0-9._-]+$/.test(repository)) return null;
+  if (!env.GITHUB_LIBRARY_TOKEN) return null;
+  try {
+    const response = await fetchImpl(
+      `https://api.github.com/repos/${repository}/contents/library/catalog.json`,
+      {
+        headers: {
+          accept: "application/vnd.github.raw+json",
+          authorization: `Bearer ${env.GITHUB_LIBRARY_TOKEN}`,
+          "user-agent": "Castalia-Mynah-Scriptorium/1"
+        }
+      }
+    );
+    if (!response.ok) return null;
+    return normalizedScriptorium(await response.json(), repository, response.headers.get("etag") || "");
   } catch {
     return null;
   }
@@ -215,23 +326,49 @@ function permissionsFor(session) {
   };
 }
 
+function gazetteerItem(title = "", summary = "", byline = "", detail = "") {
+  return { title: title || "", summary: summary || "", byline: byline || "", detail: detail || "" };
+}
+
+function gazetteerFor(content) {
+  const edition = content?.content && typeof content.content === "object" ? content : null;
+  const daily = edition?.content || {};
+  if (!edition) return null;
+  return {
+    season: edition.season || "",
+    theme: edition.theme?.message || "",
+    book: gazetteerItem(daily.book?.title, daily.book?.why, daily.book?.creator),
+    quote: gazetteerItem("Quote of the Day", daily.quote?.text, daily.quote?.attribution),
+    poem: gazetteerItem(daily.poem?.title, daily.poem?.excerpt, daily.poem?.creator, daily.poem?.note),
+    faculty: gazetteerItem(daily.faculty?.name, daily.faculty?.practice, "Faculty of the Day", daily.faculty?.astrology_note),
+    history: gazetteerItem(daily.history?.title, daily.history?.note, daily.history?.date),
+    country: gazetteerItem(daily.country?.name, daily.country?.reflection || daily.country?.thread, daily.country?.capital),
+    art: gazetteerItem(daily.art?.title, daily.art?.looking_prompt || daily.art?.thread, daily.art?.artist, daily.art?.medium),
+    bible: gazetteerItem(daily.bible?.reference, daily.bible?.text, "Bible of the Day", daily.bible?.reflection)
+  };
+}
+
 async function homePayload(fetchImpl, env, session, roomName, requestedCalendar, now) {
   const room = roomConfig(session, roomName);
   const permissions = permissionsFor(session);
-  const [content, news, event, weather, spotify, lights] = await Promise.all([
+  const [upstreamContent, familyGazetteer, news, event, weather, spotify, lights, scriptorium] = await Promise.all([
     contentFor(fetchImpl, env, session, room),
+    familyGazetteerFor(fetchImpl, env, session, now),
     newsFor(fetchImpl, env, session),
     nextEvent(fetchImpl, env, session, requestedCalendar, now),
     weatherState(fetchImpl, env, session),
     spotifyState(fetchImpl, env, room),
-    lightState(fetchImpl, env, room)
+    lightState(fetchImpl, env, room),
+    scriptoriumFor(fetchImpl, env, session)
   ]);
+  const content = familyGazetteer ? { ...upstreamContent, ...familyGazetteer } : upstreamContent;
   const castaliaEvent = content.calendar?.events?.[0] || content.today?.nextEvent || null;
   const tasks = Array.isArray(content.tasks)
     ? content.tasks
     : Array.isArray(content.calendar?.tasks)
       ? content.calendar.tasks
       : [];
+  const gazetteer = gazetteerFor(content);
   return {
     schema: "castalia.device.daily.v1",
     date: now.toISOString().slice(0, 10),
@@ -245,14 +382,27 @@ async function homePayload(fetchImpl, env, session, roomName, requestedCalendar,
     day: { aphorism: permissions.astrology ? content.day?.aphorism || content.aphorism || null : null },
     selfWeather: permissions.astrology ? content.selfWeather || content.astrology || null : null,
     synastryWeather: permissions.astrology ? content.synastryWeather || null : null,
+    astrologyMeta: permissions.astrology ? content.astrologyMeta || null : null,
     family: permissions.astrology && Array.isArray(content.family) ? content.family.slice(0, 6) : [],
     fortune: permissions.fortune ? content.fortune || null : null,
     card: permissions.cards ? content.card || null : null,
     news: content.news || news,
-    art: content.art || content.artOfTheDay || null,
-    quote: content.quote || content.quoteOfTheDay || null,
+    art: gazetteer?.art || content.art || content.artOfTheDay || null,
+    quote: gazetteer?.quote || content.quote || content.quoteOfTheDay || null,
+    gazetteer: gazetteer
+      ? {
+          season: gazetteer.season,
+          theme: gazetteer.theme,
+          book: gazetteer.book,
+          poem: gazetteer.poem,
+          faculty: gazetteer.faculty,
+          history: gazetteer.history,
+          country: gazetteer.country,
+          bible: gazetteer.bible
+        }
+      : null,
     mindfulness: content.mindfulness || null,
-    library: content.library || null,
+    library: scriptorium || content.library || null,
     codex: content.codex || null,
     settings: content.settings || null,
     ota: content.ota || null,
@@ -260,6 +410,91 @@ async function homePayload(fetchImpl, env, session, roomName, requestedCalendar,
     lights,
     permissions
   };
+}
+
+function payloadSegment(payload, segment) {
+  if (!segment) return payload;
+  const metadata = {
+    schema: payload.schema,
+    date: payload.date,
+    generatedAt: payload.generatedAt,
+    profile: payload.profile
+  };
+  const gazetteer = payload.gazetteer || {};
+  if (segment === "core") {
+    const core = { ...metadata, permissions: payload.permissions };
+    if (payload.today?.nextEvent || payload.today?.tasks?.length) core.today = payload.today;
+    if (payload.weather?.condition || payload.weather?.temperature) core.weather = payload.weather;
+    if (payload.day?.aphorism) core.day = payload.day;
+    if (payload.family?.length) core.family = payload.family;
+    for (const key of ["fortune", "card", "news", "mindfulness", "codex", "settings", "ota"]) {
+      if (payload[key] && (typeof payload[key] !== "object" || Object.keys(payload[key]).length)) {
+        core[key] = payload[key];
+      }
+    }
+    if (payload.spotify?.connected) core.spotify = payload.spotify;
+    if (payload.lights?.available) core.lights = payload.lights;
+    return core;
+  }
+  if (segment === "astrology-self") {
+    return {
+      ...metadata,
+      astrologyMeta: payload.astrologyMeta,
+      selfWeather: payload.selfWeather
+    };
+  }
+  if (segment === "astrology-synastry") {
+    return {
+      ...metadata,
+      astrologyMeta: payload.astrologyMeta,
+      synastryWeather: payload.synastryWeather
+    };
+  }
+  if (segment === "scriptorium") {
+    return {
+      ...metadata,
+      library: payload.library
+    };
+  }
+  if (segment === "daily-1") {
+    return {
+      ...metadata,
+      art: payload.art,
+      gazetteer: {
+        season: gazetteer.season || "",
+        theme: gazetteer.theme || "",
+        book: gazetteer.book || null
+      }
+    };
+  }
+  if (segment === "daily-2") {
+    return {
+      ...metadata,
+      quote: payload.quote,
+      gazetteer: {
+        poem: gazetteer.poem || null
+      }
+    };
+  }
+  if (segment === "daily-3") {
+    return {
+      ...metadata,
+      gazetteer: {
+        faculty: gazetteer.faculty || null,
+        history: gazetteer.history || null
+      }
+    };
+  }
+  if (segment === "daily-4") {
+    return {
+      ...metadata,
+      gazetteer: {
+        country: gazetteer.country || null,
+        bible: gazetteer.bible || null
+      }
+    };
+  }
+  return null;
 }
 
 async function performAction(fetchImpl, env, session, action, roomName, taskId) {
@@ -313,6 +548,30 @@ async function performAction(fetchImpl, env, session, action, roomName, taskId) 
     return actionResponse.ok;
   }
   return false;
+}
+
+async function askAlpheus(fetchImpl, env, message) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return null;
+  const text = typeof message === "string" ? message.trim().slice(0, 240) : "";
+  if (!text) return null;
+  try {
+    return await fetchJson(
+      fetchImpl,
+      `${env.SUPABASE_URL.replace(/\/+$/, "")}/functions/v1/voice-pipeline`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${env.SUPABASE_ANON_KEY}`,
+          apikey: env.SUPABASE_ANON_KEY,
+          "content-type": "application/json",
+          "x-alpheus-source": "einq"
+        },
+        body: JSON.stringify({ message: text, face: "alpheus", textOnly: true })
+      }
+    );
+  } catch {
+    return null;
+  }
 }
 
 async function refreshSession(fetchImpl, env, request) {
@@ -373,16 +632,16 @@ export function createGateway({ fetchImpl = globalThis.fetch, now = () => new Da
         request.method === "GET" &&
         (path === "/api/v1/device/home" || path === "/api/v1/device/daily")
       ) {
-        return json(
-          await homePayload(
-            fetchImpl,
-            env,
-            session,
-            url.searchParams.get("room"),
-            url.searchParams.get("calendar"),
-            now()
-          )
+        const payload = await homePayload(
+          fetchImpl,
+          env,
+          session,
+          url.searchParams.get("room"),
+          url.searchParams.get("calendar"),
+          now()
         );
+        const segmented = payloadSegment(payload, url.searchParams.get("segment"));
+        return segmented ? json(segmented) : json({ error: "invalid_segment" }, 400);
       }
 
       if (request.method === "POST" && path === "/api/v1/device/actions") {
@@ -391,6 +650,12 @@ export function createGateway({ fetchImpl = globalThis.fetch, now = () => new Da
           body = await request.json();
         } catch {
           return json({ error: "invalid_json" }, 400);
+        }
+        if (body.action === "al.respond") {
+          const answer = await askAlpheus(fetchImpl, env, body.message);
+          return answer && typeof answer.reply === "string"
+            ? json({ ok: true, transcript: answer.transcript || body.message, reply: answer.reply })
+            : json({ error: "al_unavailable" }, 503);
         }
         const accepted = await performAction(fetchImpl, env, session, body.action, body.room, body.taskId);
         return accepted ? json({ ok: true }) : json({ error: "forbidden_or_unavailable" }, 403);
