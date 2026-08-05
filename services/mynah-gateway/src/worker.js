@@ -124,10 +124,32 @@ function familyRepositoryFor(env, session) {
 }
 
 async function familyGazetteerFor(fetchImpl, env, session, now) {
+  const username = String(session.individual || session.username || "");
+  const date = now.toISOString().slice(0, 10);
+  if (username && env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
+    const base = env.SUPABASE_URL.replace(/\/+$/, "");
+    const query = new URL(`${base}/rest/v1/castalia_device_daily_editions`);
+    query.searchParams.set("username", `eq.${username}`);
+    query.searchParams.set("issue_date", `eq.${date}`);
+    query.searchParams.set("select", "payload");
+    query.searchParams.set("limit", "1");
+    try {
+      const rows = await fetchJson(fetchImpl, query, {
+        headers: {
+          apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+          authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`
+        }
+      });
+      const payload = Array.isArray(rows) ? rows[0]?.payload : null;
+      if (payload && typeof payload === "object" && !Array.isArray(payload)) return payload;
+    } catch {
+      // A private GitHub family archive remains a migration fallback.
+    }
+  }
+
   const repository = familyRepositoryFor(env, session);
   const token = env.FAMILY_RHYTHM_GITHUB_TOKEN || env.GITHUB_LIBRARY_TOKEN;
   if (!repository || !token) return null;
-  const date = now.toISOString().slice(0, 10);
   const path = `outputs/${date}/daily-content.json`;
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
   const reference = encodeURIComponent(env.FAMILY_RHYTHM_GITHUB_REF || "main");

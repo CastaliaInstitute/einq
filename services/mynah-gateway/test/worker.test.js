@@ -306,19 +306,18 @@ test("long Gazetteer excerpts are split into TLS-safe device segments", async ()
   assert.equal(segments["daily-4"].gazetteer.country.title, "Country");
 });
 
-test("private family Gazetteer astrology overlays the generic content fallback", async () => {
+test("Castalia Supabase Gazetteer astrology overlays the generic content fallback", async () => {
   const familyEnv = {
     ...env,
     DEVICE_SESSIONS: JSON.stringify({
       secret: {
         profile: "parent",
         individual: "dcmcshan",
-        familyRepository: "CastaliaInstitute/castalia-family-mcshan",
         permissions: { astrology: true },
         rooms: {}
       }
     }),
-    FAMILY_RHYTHM_GITHUB_TOKEN: "github-read-token"
+    SUPABASE_SERVICE_ROLE_KEY: "service-role-key"
   };
   const calls = [];
   const gateway = createGateway({
@@ -329,15 +328,15 @@ test("private family Gazetteer astrology overlays the generic content fallback",
       if (url.startsWith("https://castalia.example")) {
         return response({ selfWeather: { title: "Fallback", summary: "Not calculated." } });
       }
-      if (url.includes("CastaliaInstitute/castalia-family-mcshan/contents/outputs/2026-08-05/daily-content.json")) {
-        return response({
-          selfWeather: { title: "Sun square Sun", summary: "Calculated transit reading." },
-          synastryWeather: { title: "Household synastry", summary: "Calculated pair reading." },
-          astrologyMeta: {
-            source: "ephemeris.castalia.institute · Swiss Ephemeris 2.10.03",
-            effectiveAt: "2026-08-05T18:00:00+00:00"
-          }
-        });
+      if (url.includes("/rest/v1/castalia_device_daily_editions")) {
+        return response([{ payload: {
+            selfWeather: { title: "Sun square Sun", summary: "Calculated transit reading." },
+            synastryWeather: { title: "Household synastry", summary: "Calculated pair reading." },
+            astrologyMeta: {
+              source: "ephemeris.castalia.institute · Swiss Ephemeris 2.10.03",
+              effectiveAt: "2026-08-05T18:00:00+00:00"
+            }
+          } }]);
       }
       throw new Error(`unexpected ${url}`);
     }
@@ -348,8 +347,8 @@ test("private family Gazetteer astrology overlays the generic content fallback",
   assert.equal(result.status, 200);
   assert.equal(body.selfWeather.title, "Sun square Sun");
   assert.match(body.astrologyMeta.source, /ephemeris\.castalia\.institute/);
-  const githubCall = calls.find((call) => call.url.startsWith("https://api.github.com/"));
-  assert.equal(githubCall.options.headers.authorization, "Bearer github-read-token");
+  const databaseCall = calls.find((call) => call.url.includes("castalia_device_daily_editions"));
+  assert.equal(databaseCall.options.headers.authorization, "Bearer service-role-key");
 });
 
 test("configured calendar IDs resolve only through the household allow-list", async () => {

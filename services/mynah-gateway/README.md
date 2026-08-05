@@ -92,12 +92,12 @@ entries. Astrology and synastry are delivered in dedicated bounded segments so
 multi-page readings do not exceed the X3 TLS receive window. Physical
 weather comes from the allow-listed Home Assistant `weatherEntity`.
 
-When a device policy supplies `familyRepository` (or
-`FAMILY_RHYTHM_REPO_MAP_JSON` maps its `individual`), the gateway overlays the
-private `outputs/YYYY-MM-DD/daily-content.json` from that family archive. This
-is how Swiss Ephemeris-backed Gazetteer readings replace the generic content
-fallback. `FAMILY_RHYTHM_GITHUB_TOKEN` must be a read-only Contents token; it
-never leaves the gateway.
+The primary private overlay is `castalia_device_daily_editions` in Castalia
+Supabase, keyed by paired `individual` and issue date. Gazetteer publishes only
+the bounded device fields to that RLS-protected table; full charts remain in
+the private family archive. A policy-supplied `familyRepository` (or
+`FAMILY_RHYTHM_REPO_MAP_JSON`) and read-only `FAMILY_RHYTHM_GITHUB_TOKEN`
+remain a migration fallback. Credentials never leave the gateway.
 
 The `scriptorium` segment reads `library/catalog.json` from the paired
 individual's private repository (for example,
