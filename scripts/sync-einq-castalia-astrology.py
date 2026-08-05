@@ -69,8 +69,13 @@ def astrology_segments(row: dict[str, Any], profile: str = "parent") -> dict[str
     meta = payload.get("astrologyMeta") if isinstance(payload.get("astrologyMeta"), dict) else {}
     digest = str(meta.get("sourceDigestSha256") or "")
     feed = meta.get("feedCheck") if isinstance(meta.get("feedCheck"), dict) else {}
-    if not re.fullmatch(r"[0-9a-f]{64}", digest) or feed.get("status") != "passed":
-        raise ValueError("Castalia edition is not backed by a verified private source and ephemeris feed")
+    if (
+        not re.fullmatch(r"[0-9a-f]{64}", digest)
+        or feed.get("status") != "passed"
+        or meta.get("ephemerisMode") != "SWIEPH"
+        or not str(meta.get("engineDataRelease") or "").strip()
+    ):
+        raise ValueError("Castalia edition is not backed by verified pinned SWIEPH data and ephemeris feed")
     common = {
         "schema": "castalia.device.daily.v1",
         "date": row.get("issue_date"),

@@ -29,6 +29,8 @@ class CastaliaAstrologySyncTests(unittest.TestCase):
                 "astrologyMeta": {
                     "generatedAt": "2026-08-05T04:00:00+00:00",
                     "sourceDigestSha256": "a" * 64,
+                    "ephemerisMode": "SWIEPH",
+                    "engineDataRelease": "aloistr/swisseph@test-release",
                     "feedCheck": {"status": "passed"},
                 },
             },
@@ -47,6 +49,22 @@ class CastaliaAstrologySyncTests(unittest.TestCase):
             },
         }
         with self.assertRaisesRegex(ValueError, "not backed"):
+            sync.astrology_segments(row)
+
+    def test_rejects_unpinned_or_non_swieph_edition(self) -> None:
+        meta = {
+            "sourceDigestSha256": "a" * 64,
+            "feedCheck": {"status": "passed"},
+            "ephemerisMode": "MOSEPH",
+            "engineDataRelease": "aloistr/swisseph@test-release",
+        }
+        row = {"issue_date": "2026-08-05", "payload": {"astrologyMeta": meta}}
+        with self.assertRaisesRegex(ValueError, "pinned SWIEPH"):
+            sync.astrology_segments(row)
+
+        meta["ephemerisMode"] = "SWIEPH"
+        meta["engineDataRelease"] = ""
+        with self.assertRaisesRegex(ValueError, "pinned SWIEPH"):
             sync.astrology_segments(row)
 
 
