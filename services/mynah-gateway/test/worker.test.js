@@ -335,7 +335,13 @@ test("Castalia Supabase Gazetteer astrology overlays the generic content fallbac
             synastryWeather: { title: "Household synastry", summary: "Calculated pair reading." },
             astrologyMeta: {
               source: "ephemeris.castalia.institute · Swiss Ephemeris 2.10.03",
-              effectiveAt: "2026-08-05T18:00:00+00:00"
+              effectiveAt: "2026-08-05T18:00:00+00:00",
+              generatedAt: "2026-08-05T18:01:00+00:00",
+              timezone: "America/New_York",
+              sourceArtifact: "synastry-rhythms.json",
+              sourceDigestSha256: "a".repeat(64),
+              feedCheck: { status: "passed", max_delta_degrees: 0.000225 },
+              uncertaintyPolicy: "Exact inputs and per-body spans retained in the private source."
             }
           } }]);
       }
@@ -349,6 +355,9 @@ test("Castalia Supabase Gazetteer astrology overlays the generic content fallbac
   assert.equal(body.selfWeather.title, "Sun square Sun");
   assert.equal(body.date, "2026-08-04");
   assert.match(body.astrologyMeta.source, /ephemeris\.castalia\.institute/);
+  assert.equal(body.astrologyMeta.feedCheck.status, "passed");
+  assert.equal(body.astrologyMeta.sourceDigestSha256, "a".repeat(64));
+  assert.match(body.astrologyMeta.uncertaintyPolicy, /per-body spans/);
   const databaseCall = calls.find((call) => call.url.includes("castalia_device_daily_editions"));
   assert.equal(databaseCall.options.headers.authorization, "Bearer service-role-key");
   assert.equal(new URL(databaseCall.url).searchParams.get("issue_date"), "eq.2026-08-04");
